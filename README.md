@@ -21,9 +21,9 @@
 
 | 变量 | 说明 | 示例 |
 |---|---|---|
-| `PUSHER_APP_ID` | Pusher Channels App ID | `2198079` |
-| `PUSHER_KEY` | Pusher 公钥（客户端公开） | `b01c88ae7d359a852617` |
-| `PUSHER_SECRET` | Pusher 私钥（**标记为秘密值**） | `e5a20eed3595a78c6cca` |
+| `PUSHER_APP_ID` | Pusher Channels App ID（Pusher 控制台 → 应用密钥） | `<your-app-id>` |
+| `PUSHER_KEY` | Pusher 公钥（客户端公开） | `<your-key>` |
+| `PUSHER_SECRET` | Pusher 私钥（**标记为秘密值**，绝不写入仓库） | `<your-secret>` |
 | `PUSHER_CLUSTER` | Pusher 集群 | `ap1` |
 | `ADMIN_KEY` | 管理面板密码（可选，默认 `ayanball-admin`） | `ayanball-admin` |
 
