@@ -1,0 +1,17 @@
+{
+  "name": "ayanball-chat-server",
+  "version": "2.0.0",
+  "private": true,
+  "description": "AyanBall Chat 动态服务端（Netlify Functions + Pusher 实时通道 + 图形化管理面板）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "serve:ws": "node server.js",
+    "test": "node test-netlify.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "pusher": "^5.2.0",
+    "@netlify/blobs": "^8.2.0"
+  }
+}

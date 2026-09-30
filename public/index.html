@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AyanBall Chat Server · 服务端</title>
+<style>
+  :root {
+    --bg1: #eef6f4; --bg2: #e8f0fa; --panel: #ffffff; --bd: #e6e9ee;
+    --text1: #1c2430; --text2: #52606f; --text3: #8a97a6;
+    --accent: #0db39e; --accent-strong: #0a9b89; --green: #2f9e63; --red: #e5484d;
+    --radius: 16px; --shadow: 0 4px 16px rgba(28,36,48,.06); --shadow-lg: 0 16px 40px rgba(28,36,48,.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+    color: var(--text1); font-size: 14px; -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;
+  }
+  .card {
+    width: 480px; max-width: 100%; background: var(--panel); border-radius: 24px;
+    box-shadow: var(--shadow-lg); padding: 40px 36px; position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 5px;
+    background: linear-gradient(90deg, #0db39e, #0a7dbf);
+  }
+  .head { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+  .logo {
+    width: 56px; height: 56px; border-radius: 16px; flex: none;
+    background: linear-gradient(135deg, #0db39e, #0a7dbf);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 20px rgba(13,179,158,.32);
+  }
+  .logo svg { width: 30px; height: 30px; fill: #fff; }
+  .head h1 { font-size: 22px; font-weight: 650; letter-spacing: .2px; }
+  .head p { color: var(--text3); font-size: 13px; margin-top: 3px; }
+  .status-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    background: #f4fbf9; border: 1px solid #d9f1ea; border-radius: 12px; margin-bottom: 10px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(47,158,99,.15); flex: none; }
+  .status-row .t { font-weight: 600; }
+  .status-row .s { color: var(--text2); }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0 26px; }
+  .meta .item {
+    background: #fafbfc; border: 1px solid var(--bd); border-radius: 12px; padding: 14px 14px 12px;
+  }
+  .meta .item .k { color: var(--text3); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .meta .item .k svg { width: 13px; height: 13px; fill: var(--text3); }
+  .meta .item .v { font-size: 15px; font-weight: 600; margin-top: 6px; }
+  .actions { display: flex; gap: 12px; }
+  .btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px 16px; border-radius: 12px; font-weight: 600; font-size: 14px;
+    text-decoration: none; transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn svg { width: 16px; height: 16px; fill: currentColor; }
+  .btn-primary { background: linear-gradient(135deg, #0db39e, #0a9b89); color: #fff; box-shadow: 0 6px 16px rgba(13,179,158,.3); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(13,179,158,.4); }
+  .btn-ghost { background: #fff; color: var(--text2); border: 1px solid var(--bd); }
+  .btn-ghost:hover { color: var(--accent-strong); border-color: #b6e6dd; }
+  .foot { margin-top: 22px; color: var(--text3); font-size: 12px; text-align: center; line-height: 1.7; }
+  .foot code { background: #f0f2f5; padding: 2px 6px; border-radius: 5px; font-size: 11px; color: var(--text2); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M4 4h9a7 7 0 0 1 0 14h-2v4l-4-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 5v2h6V9H6Zm0 4v2h4v-2H6Z"/></svg>
+      </div>
+      <div>
+        <h1>AyanBall Chat Server</h1>
+        <p>Netlify 动态服务端 · 实时聊天后端</p>
+      </div>
+    </div>
+
+    <div class="status-row">
+      <span class="dot"></span>
+      <span class="t">服务运行中</span>
+      <span class="s" style="margin-left:auto">Pusher 实时通道已连接</span>
+    </div>
+
+    <div class="meta">
+      <div class="item">
+        <div class="k"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-1 13a8 8 0 0 1-6.9-4H12v-5h2v9h-2Z"/></svg>实时通道</div>
+        <div class="v">Pusher Channels</div>
+      </div>
+      <div class="item">
+        <div class="k"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 2.2 5.6 2.8L12 10.8 6.4 8 12 5.2ZM6 9.6l5 2.5v6.2l-5-2.5V9.6Zm7 8.7v-6.2l5-2.5v6.2l-5 2.5Z"/></svg>数据存储</div>
+        <div class="v">Netlify Blobs</div>
+      </div>
+      <div class="item">
+        <div class="k"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8Zm1-13h-2v6l5 3 1-1.6-4-2.4Z"/></svg>文件传输</div>
+        <div class="v">≤50MB · 3天有效</div>
+      </div>
+      <div class="item">
+        <div class="k"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Zm4 10h-3v3h-2v-3H8v-2h3V7h2v3h3v2Z"/></svg>管理面板</div>
+        <div class="v">ADMIN_KEY 保护</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/admin.html">
+        <svg viewBox="0 0 24 24"><path d="M3 5h18v4H3V5Zm0 6h18v2H3v-2Zm0 4h18v2H3v-2Zm0 4h18v2H3v-2Z"/></svg>
+        打开管理面板
+      </a>
+      <a class="btn btn-ghost" href="/.netlify/functions/api">
+        <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 5h2v8h-2V7Zm0 10h2v2h-2v-2Z"/></svg>
+        接口入口
+      </a>
+    </div>
+
+    <div class="foot">
+      API 入口 <code>/.netlify/functions/api</code> · 管理面板 <code>/admin.html</code><br />
+      首个注册用户自动成为管理员 · AyanBall Chat © 2026
+    </div>
+  </div>
+</body>
+</html>

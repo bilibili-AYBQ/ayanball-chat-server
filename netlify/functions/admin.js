@@ -1,0 +1,353 @@
+// ================= AyanBall Chat · 管理面板 API =================
+// 图形化管理面板（admin.html）的后端：登录 / 统计 / 用户 / 群 / 消息 / 文件 / 广播 / 清理
+// 管理会话存 Netlify Blobs（12h TTL）
+// 实时推送：Pusher Channels（private-user_*）
+const Pusher = require("pusher");
+const {
+  store, readState, writeState, mutate, uid, avatarOf, json, readBody,
+  ADMIN_PASSWORD,
+} = require("./_lib.js");
+
+const ADMIN_TOKEN_TTL = 12 * 3600 * 1000; // 管理面板会话 12 小时
+const ONLINE_WINDOW_MS = 60000; // HTTP 心跳在线窗口
+
+let _pusher = null;
+function pusherClient() {
+  const appId = process.env.PUSHER_APP_ID;
+  const key = process.env.PUSHER_KEY;
+  const secret = process.env.PUSHER_SECRET;
+  if (!appId || !key || !secret) return null;
+  if (!_pusher) {
+    _pusher = new Pusher({
+      appId, key, secret,
+      cluster: process.env.PUSHER_CLUSTER || "mt1",
+      useTLS: true,
+    });
+  }
+  return _pusher;
+}
+
+async function isAdminSession(event) {
+  const t = String((event.headers.authorization || "").replace("Bearer ", ""));
+  const sessions = (await readState("adminSessions")) || {};
+  const exp = sessions[t];
+  if (!exp) return false;
+  if (Date.now() > exp) {
+    delete sessions[t];
+    await writeState("adminSessions", sessions);
+    return false;
+  }
+  return true;
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(204, {});
+  const pathPart = (event.path || "").split("/").pop(); // stats / users / groups / messages / files ...
+  const method = event.httpMethod;
+
+  // ---- 登录 ----
+  if (method === "POST" && pathPart === "login") {
+    const pass = String(readBody(event).password || "");
+    if (pass !== ADMIN_PASSWORD) return json(403, { error: "bad-password" });
+    const t = uid("a_");
+    await mutate("adminSessions", (s) => { s[t] = Date.now() + ADMIN_TOKEN_TTL; return s; }, {});
+    return json(200, { token: t });
+  }
+
+  if (!(await isAdminSession(event))) return json(401, { error: "unauthorized" });
+
+  const users = (await readState("users")) || {};
+  const groups = (await readState("groups")) || {};
+  const files = (await readState("files")) || {};
+  const body = readBody(event);
+
+  // ---- 统计 ----
+  if (method === "GET" && pathPart === "stats") {
+    let msgTotal = 0, fileTotal = 0;
+    const list = await store().list({ prefix: "room:" });
+    for (const item of (list?.blobs || [])) {
+      const room = (await readState(item.key)) || [];
+      msgTotal += room.length;
+      for (const m of room) if (m.kind === "file") fileTotal++;
+    }
+    const online = await onlineUserIds();
+    return json(200, {
+      users: Object.keys(users).length,
+      online: online.length,
+      groups: Object.keys(groups).length,
+      messages: msgTotal,
+      files: Object.keys(files).length,
+      filesBytes: fileTotal,
+      adminPanelUrl: "/admin.html",
+      realtime: "Netlify Functions + Pusher",
+    });
+  }
+
+  // ---- 用户 ----
+  if (method === "GET" && pathPart === "users") {
+    const online = new Set(await onlineUserIds());
+    const friendCounts = {};
+    for (const u of Object.values(users)) {
+      friendCounts[u.id] = ((await readState(`friends:${u.id}`)) || []).length;
+    }
+    const list = Object.values(users).map((u) => ({
+      id: u.id,
+      username: u.username,
+      nickname: u.nickname,
+      admin: !!u.admin,
+      createdAt: u.createdAt,
+      online: online.has(u.id),
+      friendCount: friendCounts[u.id] || 0,
+      groupCount: Object.values(groups).filter((g) => g.memberIds.includes(u.id)).length,
+    }));
+    return json(200, { users: list });
+  }
+
+  if (method === "POST" && pathPart === "promote") {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    u.admin = true;
+    await writeState("users", users);
+    await pushUser(u.id, "promoted", { userId: u.id, by: "admin" });
+    return json(200, {});
+  }
+
+  if (method === "POST" && pathPart === "demote") {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    u.admin = false;
+    await writeState("users", users);
+    return json(200, {});
+  }
+
+  if (method === "POST" && pathPart === "delete") {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    await deleteUserCompletely(u.id);
+    return json(200, {});
+  }
+
+  // ---- 群聊 ----
+  if (method === "GET" && pathPart === "groups") {
+    const list = Object.values(groups).map((g) => ({
+      id: g.id,
+      name: g.name,
+      code: g.code,
+      ownerId: g.ownerId,
+      ownerName: users[g.ownerId] ? users[g.ownerId].username : "未知",
+      adminIds: g.adminIds || [],
+      memberCount: g.memberIds.length,
+      members: g.memberIds.map((id) => {
+        const u = users[id];
+        return u ? { id: u.id, username: u.username, nickname: u.nickname, avatar: avatarOf(u) } : null;
+      }).filter(Boolean),
+      createdAt: g.createdAt,
+    }));
+    return json(200, { groups: list });
+  }
+
+  if (method === "POST" && pathPart === "dissolve") {
+    const g = groups[String(body.id || "")];
+    if (!g) return json(404, { error: "not-found" });
+    for (const mid of g.memberIds) await pushUser(mid, "group.removed", { groupId: g.id });
+    delete groups[g.id];
+    await writeState("groups", groups);
+    await writeState(`room:g:${g.id}`, []);
+    return json(200, {});
+  }
+
+  if (method === "POST" && pathPart === "kick") {
+    const g = groups[String(body.id || "")];
+    if (!g) return json(404, { error: "not-found" });
+    const targetId = String(body.userId || "");
+    if (targetId === g.ownerId) return json(400, { error: "cannot-kick-owner" });
+    if (!g.memberIds.includes(targetId)) return json(400, { error: "not-member" });
+    g.memberIds = g.memberIds.filter((x) => x !== targetId);
+    g.adminIds = (g.adminIds || []).filter((x) => x !== targetId);
+    await writeState("groups", groups);
+    await pushUser(targetId, "group.kicked", { groupId: g.id });
+    if (g.memberIds.length === 0) {
+      delete groups[g.id];
+      await writeState("groups", groups);
+      await writeState(`room:g:${g.id}`, []);
+    } else {
+      await pushGroupUpdate(g);
+    }
+    return json(200, {});
+  }
+
+  if (method === "POST" && pathPart === "transfer") {
+    const g = groups[String(body.id || "")];
+    if (!g) return json(404, { error: "not-found" });
+    const targetId = String(body.userId || "");
+    if (!g.memberIds.includes(targetId)) return json(400, { error: "not-member" });
+    g.ownerId = targetId;
+    if (!(g.adminIds || []).includes(targetId)) g.adminIds.push(targetId);
+    await writeState("groups", groups);
+    await pushGroupUpdate(g);
+    return json(200, {});
+  }
+
+  // ---- 消息 ----
+  if (method === "GET" && pathPart === "messages") {
+    const limit = Number(event.queryStringParameters?.limit) || 200;
+    const arr = [];
+    const list = await store().list({ prefix: "room:" });
+    for (const item of (list?.blobs || [])) {
+      const key = item.key.replace("room:", "");
+      const isGroup = key.startsWith("g:");
+      const group = groups[key];
+      const room = (await readState(item.key)) || [];
+      for (const m of room) {
+        arr.push({
+          id: m.id,
+          kind: m.kind,
+          content: m.content,
+          file: m.file ? { name: m.file.name, size: m.file.size, url: m.file.url, expiresAt: m.file.expiresAt } : undefined,
+          senderId: m.senderId,
+          senderName: m.senderName,
+          ts: m.ts,
+          roomType: isGroup ? "group" : "dm",
+          roomName: isGroup ? (group ? group.name : key) : "私聊",
+        });
+      }
+    }
+    arr.sort((a, b) => b.ts - a.ts);
+    return json(200, { messages: arr.slice(0, Math.min(limit, 500)) });
+  }
+
+  // ---- 文件 ----
+  if (method === "GET" && pathPart === "files") {
+    const list = Object.values(files).map((f) => ({
+      id: f.id,
+      name: f.name,
+      size: f.size,
+      createdAt: f.createdAt,
+      expiresAt: f.expiresAt,
+      ownerName: users[f.ownerId] ? users[f.ownerId].username : "未知",
+    }));
+    return json(200, { files: list });
+  }
+
+  if (method === "POST" && (pathPart === "delete-file" || (event.path || "").endsWith("/files/delete"))) {
+    const meta = files[String(body.id || "")];
+    if (!meta) return json(404, { error: "not-found" });
+    delete files[meta.id];
+    await writeState("files", files);
+    try { await store().delete(`blob:${meta.id}`); } catch { /* ignore */ }
+    return json(200, {});
+  }
+
+  // ---- 维护 ----
+  if (method === "POST" && pathPart === "cleanup") {
+    let removed = 0;
+    const now = Date.now();
+    for (const [fid, meta] of Object.entries(files)) {
+      if (now > meta.expiresAt) {
+        delete files[fid];
+        try { await store().delete(`blob:${fid}`); } catch { /* ignore */ }
+        removed++;
+      }
+    }
+    await writeState("files", files);
+    return json(200, { removed });
+  }
+
+  if (method === "POST" && pathPart === "cleanup-tokens") {
+    const tokens = (await readState("tokens")) || {};
+    let removed = 0;
+    for (const [t, uidv] of Object.entries(tokens)) {
+      if (!users[uidv]) { delete tokens[t]; removed++; }
+    }
+    await writeState("tokens", tokens);
+    const sessions = (await readState("adminSessions")) || {};
+    for (const [t, exp] of Object.entries(sessions)) {
+      if (Date.now() > exp) { delete sessions[t]; removed++; }
+    }
+    await writeState("adminSessions", sessions);
+    return json(200, { removed });
+  }
+
+  // ---- 广播 ----
+  if (method === "POST" && pathPart === "broadcast") {
+    const text = String(body.text || "").trim().slice(0, 500);
+    if (!text) return json(400, { error: "empty" });
+    const online = await onlineUserIds();
+    for (const uidv of online) await pushUser(uidv, "system.broadcast", { text, by: "admin" });
+    return json(200, { sent: online.length });
+  }
+
+  return json(404, { error: "not-found" });
+};
+
+// ---------------- 内部工具 ----------------
+/** 在线用户：HTTP 心跳 lastSeen（客户端每 30s ping），60 秒内视为在线 */
+async function onlineUserIds() {
+  const users = (await readState("users")) || {};
+  const now = Date.now();
+  const ids = [];
+  for (const id of Object.keys(users)) {
+    const last = await readState(`lastSeen:${id}`);
+    if (last && now - last <= ONLINE_WINDOW_MS) ids.push(id);
+  }
+  return ids;
+}
+
+async function pushUser(userId, action, payload) {
+  const p = pusherClient();
+  if (!p) return;
+  try {
+    await p.trigger(`private-user_${userId}`, action, payload);
+  } catch { /* ignore */ }
+}
+
+async function pushGroupUpdate(g) {
+  const users = (await readState("users")) || {};
+  const p = pusherClient();
+  if (!p) return;
+  const payload = {
+    id: g.id,
+    name: g.name,
+    code: g.code,
+    ownerId: g.ownerId,
+    adminIds: g.adminIds || [],
+    memberCount: g.memberIds.length,
+    members: g.memberIds.map((id) => {
+      const u = users[id];
+      return u ? { id: u.id, username: u.username, nickname: u.nickname, avatar: avatarOf(u) } : null;
+    }).filter(Boolean),
+    createdAt: g.createdAt,
+  };
+  for (const mid of g.memberIds) {
+    try {
+      await p.trigger(`private-user_${mid}`, "group.updated", { group: payload });
+    } catch { /* ignore */ }
+  }
+}
+
+async function deleteUserCompletely(targetId) {
+  const users = (await readState("users")) || {};
+  const tokens = (await readState("tokens")) || {};
+  const groups = (await readState("groups")) || {};
+  const requests = (await readState("requests")) || {};
+  if (!users[targetId]) return false;
+  for (const [t, uidv] of Object.entries(tokens)) if (uidv === targetId) delete tokens[t];
+  await writeState("tokens", tokens);
+  for (const uidv of Object.keys(users)) {
+    await mutate(`friends:${uidv}`, (l) => l.filter((x) => x !== targetId), []);
+    await mutate(`blocked:${uidv}`, (l) => l.filter((x) => x !== targetId), []);
+  }
+  await writeState(`friends:${targetId}`, []);
+  await writeState(`blocked:${targetId}`, []);
+  for (const [rid, r] of Object.entries(requests)) {
+    if (r.fromId === targetId || r.toId === targetId) delete requests[rid];
+  }
+  await writeState("requests", requests);
+  for (const g of Object.values(groups)) {
+    g.memberIds = g.memberIds.filter((x) => x !== targetId);
+  }
+  await writeState("groups", groups);
+  delete users[targetId];
+  await writeState("users", users);
+  return true;
+}

@@ -1,0 +1,11 @@
+# ================= AyanBall Chat Server · Netlify 配置 =================
+# 动态服务端：netlify/functions（业务 API + Pusher 实时鉴权 + 文件预签名直传）
+# 静态资源：public（图形化管理面板 admin.html + 服务状态页 index.html）
+# 无前端构建：服务端不打包 Vite 客户端（客户端源码另行用 Tauri 打包 EXE）
+[build]
+  command = "npm install"
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

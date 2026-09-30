@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AyanBall Server 控制台</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --panel: #ffffff;
+    --panel2: #fafbfc;
+    --bd: #e6e9ee;
+    --bd2: #eef1f4;
+    --text1: #1c2430;
+    --text2: #52606f;
+    --text3: #8a97a6;
+    --accent: #0db39e;
+    --accent-soft: rgba(13, 179, 158, 0.12);
+    --accent-strong: #0a9b89;
+    --red: #e5484d;
+    --red-soft: rgba(229, 72, 77, 0.1);
+    --amber: #d9822b;
+    --green: #2f9e63;
+    --radius: 14px;
+    --shadow: 0 4px 16px rgba(28, 36, 48, 0.06);
+    --shadow-lg: 0 16px 40px rgba(28, 36, 48, 0.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text1);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  svg { display: block; }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input, textarea, select { font: inherit; color: var(--text1); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d9e0; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #b9c0ca; background-clip: padding-box; border: 2px solid transparent; }
+  .hidden { display: none !important; }
+
+  /* ---------- 登录 ---------- */
+  #login {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #eef6f4 0%, #f0f2f5 45%, #e8f0fa 100%);
+  }
+  .login-card {
+    width: 380px; background: var(--panel); border-radius: 20px;
+    box-shadow: var(--shadow-lg); padding: 36px 32px;
+  }
+  .login-logo {
+    width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 18px;
+    background: linear-gradient(135deg, #0db39e, #0a7dbf);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 20px rgba(13, 179, 158, 0.35);
+  }
+  .login-title { text-align: center; font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
+  .login-sub { text-align: center; color: var(--text3); font-size: 12px; margin: 6px 0 26px; }
+  .field { margin-bottom: 14px; }
+  .field-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 600; }
+  .input {
+    width: 100%; border: 1px solid var(--bd); background: var(--panel2);
+    border-radius: 10px; padding: 10px 12px; outline: none; transition: 0.15s;
+  }
+  .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: #fff; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border-radius: 10px; padding: 10px 16px; font-weight: 600; transition: 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; margin-top: 8px; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-ghost { background: var(--panel2); border: 1px solid var(--bd); color: var(--text2); }
+  .btn-ghost:hover { background: #eef1f4; color: var(--text1); }
+  .btn-danger { background: var(--red-soft); color: var(--red); }
+  .btn-danger:hover { background: rgba(229, 72, 77, 0.18); }
+  .btn-soft { background: var(--accent-soft); color: var(--accent-strong); }
+  .btn-soft:hover { background: rgba(13, 179, 158, 0.2); }
+  .login-hint {
+    margin-top: 18px; padding: 10px 12px; border-radius: 10px;
+    background: rgba(217, 130, 43, 0.08); color: var(--amber); font-size: 12px; line-height: 1.6;
+  }
+  .login-err { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+  /* ---------- 布局 ---------- */
+  .layout { display: flex; height: 100vh; }
+  aside {
+    width: 236px; flex-shrink: 0; background: var(--panel);
+    border-right: 1px solid var(--bd); display: flex; flex-direction: column;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 20px 20px 18px; }
+  .brand-logo {
+    width: 38px; height: 38px; border-radius: 11px;
+    background: linear-gradient(135deg, #0db39e, #0a7dbf);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .brand-name { font-size: 15px; font-weight: 700; }
+  .brand-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  nav { flex: 1; padding: 6px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+    border-radius: 10px; color: var(--text2); font-weight: 600; font-size: 13.5px; transition: 0.15s;
+  }
+  .nav-item:hover { background: var(--panel2); color: var(--text1); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent-strong); }
+  .side-foot { padding: 16px 20px; font-size: 11px; color: var(--text3); border-top: 1px solid var(--bd2); }
+  main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 28px 14px; position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  header h1 { font-size: 19px; font-weight: 700; }
+  .head-right { display: flex; align-items: center; gap: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; background: var(--panel);
+    border: 1px solid var(--bd); border-radius: 999px; padding: 6px 13px;
+    font-size: 12px; font-weight: 600; color: var(--text2);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .content { padding: 6px 28px 40px; }
+
+  /* ---------- 卡片/表格 ---------- */
+  .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--bd); border-radius: var(--radius);
+    padding: 18px 18px 16px; box-shadow: var(--shadow);
+  }
+  .stat-top { display: flex; align-items: center; justify-content: space-between; }
+  .stat-icon {
+    width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  }
+  .stat-value { font-size: 26px; font-weight: 700; margin-top: 14px; letter-spacing: 0.3px; }
+  .stat-label { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .card { background: var(--panel); border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 22px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--bd2);
+  }
+  .card-title { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+  .card-body { padding: 18px 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 11.5px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 12px; border-bottom: 1px solid var(--bd2);
+  }
+  td { padding: 12px; font-size: 13px; border-bottom: 1px solid var(--bd2); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: 0.12s; }
+  tbody tr:hover { background: var(--panel2); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-admin { background: rgba(217, 130, 43, 0.12); color: var(--amber); }
+  .badge-user { background: var(--panel2); color: var(--text3); border: 1px solid var(--bd); }
+  .badge-on { background: rgba(47, 158, 99, 0.12); color: var(--green); }
+  .badge-off { background: var(--panel2); color: var(--text3); }
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .mini-btn {
+    display: inline-flex; align-items: center; gap: 5px; border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; font-weight: 600; transition: 0.15s;
+  }
+  .mini-btn:hover { filter: brightness(1.06); }
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .toolbar .input { width: 240px; }
+  .empty { padding: 48px 0; text-align: center; color: var(--text3); font-size: 13px; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; font-size: 14px;
+  }
+  .cell-user { display: flex; align-items: center; gap: 10px; }
+  .cell-user b { font-size: 13.5px; }
+  .cell-user span { display: block; font-size: 11.5px; color: var(--text3); margin-top: 1px; }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+  .msg-item {
+    display: flex; gap: 12px; padding: 12px; border-bottom: 1px solid var(--bd2); align-items: flex-start;
+  }
+  .msg-item:last-child { border-bottom: none; }
+  .msg-time { font-size: 11px; color: var(--text3); white-space: nowrap; }
+  .msg-kind { font-size: 12px; color: var(--text2); margin-top: 2px; word-break: break-all; line-height: 1.5; }
+  .msg-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--bd); border-radius: 5px; padding: 1px 6px; margin-left: 8px; }
+  .file-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .file-name svg { color: var(--accent); }
+
+  /* ---------- 系统操作 ---------- */
+  .action-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--bd2); }
+  .action-row:last-child { border-bottom: none; }
+  .action-label b { font-size: 13.5px; }
+  .action-label p { font-size: 12px; color: var(--text3); margin-top: 3px; line-height: 1.5; }
+  .broadcast-box { display: flex; flex-direction: column; gap: 12px; }
+  textarea.input { resize: vertical; min-height: 96px; line-height: 1.6; }
+
+  /* ---------- 弹窗/提示 ---------- */
+  #modalMask {
+    position: fixed; inset: 0; z-index: 100; background: rgba(28, 36, 48, 0.4);
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
+  }
+  .modal {
+    width: 400px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow-lg);
+    padding: 24px; animation: pop 0.18s ease;
+  }
+  .modal-title { font-size: 15.5px; font-weight: 700; margin-bottom: 8px; }
+  .modal-text { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  #toastBox {
+    position: fixed; top: 18px; right: 18px; z-index: 200; display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast {
+    background: #1c2430; color: #f2f5f8; border-radius: 12px; padding: 11px 16px; font-size: 13px;
+    box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 10px; animation: slidein 0.2s ease;
+  }
+  .toast.ok svg { color: #3fd8b8; }
+  .toast.err svg { color: #ff8a8f; }
+  @keyframes pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes slidein { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+</style>
+</head>
+<body>
+
+<!-- ================= 登录 ================= -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+        <path d="M21 11.5a8.5 8.5 0 01-8.5 8.5c-1.4 0-2.7-.33-3.9-.92L3 20l1.2-4.8A8.5 8.5 0 1112 20c1.4 0 2.7-.33 3.9-.92" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="login-title">AyanBall Server 控制台</div>
+    <div class="login-sub">图形化管理面板 · 仅限管理员访问</div>
+    <div class="field">
+      <div class="field-label">管理员密码</div>
+      <input class="input" id="loginPass" type="password" placeholder="请输入 ADMIN_KEY / 默认密码" autocomplete="current-password" />
+    </div>
+    <div class="login-err" id="loginErr"></div>
+    <button class="btn btn-primary" id="loginBtn">登 录</button>
+    <div class="login-hint">默认密码：ayanball-admin（可用环境变量 ADMIN_KEY 修改）。该面板仅为本机测试服务端提供图形化管理。</div>
+  </div>
+</div>
+
+<!-- ================= 主界面 ================= -->
+<div id="app" class="layout hidden">
+  <aside>
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M21 11.5a8.5 8.5 0 01-8.5 8.5c-1.4 0-2.7-.33-3.9-.92L3 20l1.2-4.8A8.5 8.5 0 1112 20c1.4 0 2.7-.33 3.9-.92" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">AyanBall Server</div>
+        <div class="brand-sub">Node.js 测试服务端</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-tab="dashboard">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/></svg>
+        概览
+      </button>
+      <button class="nav-item" data-tab="users">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 5.5a3 3 0 100 5M17.5 14.2c1.6.5 2.8 1.8 3 3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        用户管理
+      </button>
+      <button class="nav-item" data-tab="groups">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 5.5a3 3 0 100 5M17.5 14.2c1.6.5 2.8 1.8 3 3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        群聊管理
+      </button>
+      <button class="nav-item" data-tab="messages">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8a2.5 2.5 0 01-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 014 13.5v-8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8h8M8 11.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        消息记录
+      </button>
+      <button class="nav-item" data-tab="files">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5A2.5 2.5 0 016 4h3.2l2 2.4H18A2.5 2.5 0 0120.5 8.9v8.6A2.5 2.5 0 0118 20H6a2.5 2.5 0 01-2.5-2.5v-11z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        文件管理
+      </button>
+      <button class="nav-item" data-tab="system">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 8h9M17 8h3M4 16h3M11 16h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="14.5" cy="8" r="2.3" stroke="currentColor" stroke-width="1.7"/><circle cx="8.5" cy="16" r="2.3" stroke="currentColor" stroke-width="1.7"/></svg>
+        系统操作
+      </button>
+    </nav>
+    <div class="side-foot">AyanBall Chat · Server v1.1</div>
+  </aside>
+
+  <main>
+    <header>
+      <h1 id="pageTitle">概览</h1>
+      <div class="head-right">
+        <span class="pill"><span class="dot"></span><span id="pillText">连接中…</span></span>
+        <button class="btn btn-ghost" id="logoutBtn" style="padding:7px 12px;font-size:12.5px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M10 5H5.5A2.5 2.5 0 003 7.5v9A2.5 2.5 0 005.5 19H10M14 8l4 4-4 4M18 12H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          退出
+        </button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- ======== 概览 ======== -->
+      <section id="tab-dashboard">
+        <div class="grid-stats" id="statGrid"></div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              服务信息
+            </div>
+          </div>
+          <div class="card-body" id="serverInfo"></div>
+        </div>
+      </section>
+
+      <!-- ======== 用户 ======== -->
+      <section id="tab-users" class="hidden">
+        <div class="toolbar">
+          <input class="input" id="userSearch" placeholder="搜索用户名 / 昵称…" />
+          <button class="btn btn-ghost" id="userRefresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:6px 10px;">
+            <table>
+              <thead><tr>
+                <th>用户</th><th>角色</th><th>状态</th><th>好友/群</th><th>注册时间</th><th style="text-align:right;">操作</th>
+              </tr></thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 群聊 ======== -->
+      <section id="tab-groups" class="hidden">
+        <div class="card">
+          <div class="card-body" style="padding:6px 10px;">
+            <table>
+              <thead><tr>
+                <th>群聊</th><th>邀请码</th><th>群主</th><th>成员数</th><th>创建时间</th><th style="text-align:right;">操作</th>
+              </tr></thead>
+              <tbody id="groupRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 消息 ======== -->
+      <section id="tab-messages" class="hidden">
+        <div class="toolbar">
+          <select class="input" id="msgFilter" style="width:160px;">
+            <option value="all">全部消息</option>
+            <option value="text">仅文本</option>
+            <option value="file">仅文件</option>
+          </select>
+          <button class="btn btn-ghost" id="msgRefresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:6px 12px;" id="msgList"></div>
+        </div>
+      </section>
+
+      <!-- ======== 文件 ======== -->
+      <section id="tab-files" class="hidden">
+        <div class="card">
+          <div class="card-body" style="padding:6px 10px;">
+            <table>
+              <thead><tr>
+                <th>文件</th><th>大小</th><th>上传者</th><th>上传时间</th><th>剩余有效期</th><th style="text-align:right;">操作</th>
+              </tr></thead>
+              <tbody id="fileRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 系统 ======== -->
+      <section id="tab-system" class="hidden">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M10.5 21a2 2 0 003 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              广播消息
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="broadcast-box">
+              <textarea class="input" id="bcText" placeholder="向所有在线用户发送一条系统通知…"></textarea>
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="btn btn-primary" id="bcBtn" style="width:auto;padding:9px 20px;">发送广播</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2 4 4.5.6-3.2 3.2.8 4.4-4.1-2.2-4.1 2.2.8-4.4L5.5 7.1l4.5-.6 2-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M19 17l-1.5 2.5M19 17l2-1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              维护工具
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="action-row">
+              <div class="action-label">
+                <b>清理过期文件</b>
+                <p>删除所有超过 3 天有效期的文件记录与磁盘文件。</p>
+              </div>
+              <button class="btn btn-soft" id="cleanFilesBtn">立即清理</button>
+            </div>
+            <div class="action-row">
+              <div class="action-label">
+                <b>清理离线登录态</b>
+                <p>清除所有已失效的客户端令牌（不影响在线用户）。</p>
+              </div>
+              <button class="btn btn-soft" id="cleanTokensBtn">立即清理</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- 确认弹窗 -->
+<div id="modalMask" class="hidden">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">确认操作</div>
+    <div class="modal-text" id="modalText"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">取消</button>
+      <button class="btn btn-danger" id="modalOk" style="color:#fff;background:var(--red);">确认</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastBox"></div>
+
+<script>
+"use strict";
+/* ============ 常量与状态 ============ */
+var TOKEN_KEY = "abc-admin-token";
+var token = localStorage.getItem(TOKEN_KEY) || "";
+var currentTab = "dashboard";
+var users = [];
+var timer = null;
+
+/* ============ 工具 ============ */
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(2) + " GB";
+}
+function fmtTime(ts) {
+  if (!ts) return "—";
+  var d = new Date(ts);
+  var p = function (x) { return String(x).padStart(2, "0"); };
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+function fmtUptime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  if (d) return d + " 天 " + h + " 小时";
+  if (h) return h + " 小时 " + m + " 分";
+  if (m) return m + " 分 " + s + " 秒";
+  return s + " 秒";
+}
+function toast(msg, ok) {
+  var box = $("toastBox");
+  var el = document.createElement("div");
+  el.className = "toast " + (ok === false ? "err" : "ok");
+  el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none">' +
+    (ok === false
+      ? '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
+      : '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>') +
+    '</svg><span>' + esc(msg) + '</span>';
+  box.appendChild(el);
+  setTimeout(function () { el.style.opacity = "0"; el.style.transition = "opacity .3s"; }, 2600);
+  setTimeout(function () { el.remove(); }, 3000);
+}
+
+/* 确认弹窗（Promise 化） */
+function confirmDialog(title, text, okLabel) {
+  return new Promise(function (resolve) {
+    $("modalTitle").textContent = title;
+    $("modalText").innerHTML = text;
+    $("modalOk").textContent = okLabel || "确认";
+    $("modalMask").classList.remove("hidden");
+    var done = function (v) {
+      $("modalMask").classList.add("hidden");
+      $("modalOk").onclick = null; $("modalCancel").onclick = null;
+      resolve(v);
+    };
+    $("modalOk").onclick = function () { done(true); };
+    $("modalCancel").onclick = function () { done(false); };
+  });
+}
+
+/* ============ API ============ */
+function api(path, method, body) {
+  var headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  return fetch(path, {
+    method: method || "GET",
+    headers: headers,
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(function (res) {
+    if (res.status === 401) {
+      logout();
+      throw new Error("unauthorized");
+    }
+    return res.json().then(function (d) {
+      if (!res.ok) throw new Error(d.error || "request-failed");
+      return d;
+    });
+  });
+}
+
+/* ============ 登录 / 登出 ============ */
+function tryLogin() {
+  var pass = $("loginPass").value;
+  $("loginErr").textContent = "";
+  $("loginBtn").disabled = true;
+  fetch("/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: pass }),
+  }).then(function (res) { return res.json(); }).then(function (d) {
+    if (d.token) {
+      token = d.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      enterApp();
+    } else {
+      $("loginErr").textContent = "密码错误，请重试";
+    }
+  }).catch(function () {
+    $("loginErr").textContent = "无法连接服务端";
+  }).finally(function () {
+    $("loginBtn").disabled = false;
+  });
+}
+function logout() {
+  token = "";
+  localStorage.removeItem(TOKEN_KEY);
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("loginPass").value = "";
+  if (timer) { clearInterval(timer); timer = null; }
+}
+function enterApp() {
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  loadDashboard();
+  if (timer) clearInterval(timer);
+  timer = setInterval(function () { loadStats(); }, 8000);
+}
+
+/* ============ 统计 ============ */
+function statCard(icon, color, value, label) {
+  return '<div class="stat"><div class="stat-top"><div class="stat-icon" style="background:' + color.bg + ';color:' + color.fg + ';">' + icon + '</div></div>' +
+    '<div class="stat-value">' + value + '</div><div class="stat-label">' + label + '</div></div>';
+}
+var ICON_USER = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 5.5a3 3 0 100 5M17.5 14.2c1.6.5 2.8 1.8 3 3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+var ICON_GROUP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 5.5a3 3 0 100 5M17.5 14.2c1.6.5 2.8 1.8 3 3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+var ICON_MSG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8a2.5 2.5 0 01-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 014 13.5v-8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8h8M8 11.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+var ICON_FILE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5A2.5 2.5 0 016 4h3.2l2 2.4H18A2.5 2.5 0 0120.5 8.9v8.6A2.5 2.5 0 0118 20H6a2.5 2.5 0 01-2.5-2.5v-11z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+var ICON_CALL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7.5C4 4.5 6.5 3 8 3c.5 0 1 .3 1.2.9l1 2.6c.2.5.1 1.1-.3 1.5l-1.5 1.3c.5 2 1.5 3.8 3 5.3 1.5 1.5 3.3 2.5 5.3 3l1.3-1.5c.4-.4 1-.5 1.5-.3l2.6 1c.6.2.9.7.9 1.2 0 1.5-1.5 4-4.5 4C9 20.7 4 15 4 7.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+function loadStats() {
+  api("/api/admin/stats").then(function (s) {
+    $("pillText").textContent = "在线 " + s.online + " · 共 " + s.users + " 用户";
+    $("statGrid").innerHTML =
+      statCard(ICON_USER, { bg: "rgba(13,179,158,.12)", fg: "#0a9b89" }, s.online + " / " + s.users, "在线用户 / 注册用户") +
+      statCard(ICON_GROUP, { bg: "rgba(10,125,191,.12)", fg: "#0a7dbf" }, s.groups, "群聊数量") +
+      statCard(ICON_MSG, { bg: "rgba(122,90,248,.12)", fg: "#7a5af8" }, s.messages, "累计消息") +
+      statCard(ICON_FILE, { bg: "rgba(217,130,43,.12)", fg: "#d9822b" }, s.files, "文件数量") +
+      statCard(ICON_CALL, { bg: "rgba(229,72,77,.12)", fg: "#e5484d" }, s.calls, "进行中通话") +
+      statCard('<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>', { bg: "rgba(47,158,99,.12)", fg: "#2f9e63" }, fmtUptime(s.uptimeSec), "运行时长");
+    $("serverInfo").innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">' +
+      infoRow("监听端口", String(s.port)) + infoRow("WebSocket", "ws://127.0.0.1:" + s.port) +
+      infoRow("管理面板", "http://127.0.0.1:" + s.port + "/admin") + infoRow("内存占用", s.memMB + " MB") +
+      '</div>';
+  }).catch(function () {});
+}
+function infoRow(k, v) {
+  return '<div><div style="font-size:11.5px;color:var(--text3);margin-bottom:4px;">' + k + '</div>' +
+    '<div class="mono" style="font-size:13px;font-weight:600;">' + esc(v) + '</div></div>';
+}
+function loadDashboard() { loadStats(); }
+
+/* ============ 用户 ============ */
+function loadUsers() {
+  return api("/api/admin/users").then(function (d) {
+    users = d.users || [];
+    renderUsers();
+  });
+}
+function renderUsers() {
+  var q = ($("userSearch").value || "").trim().toLowerCase();
+  var rows = users.filter(function (u) {
+    return !q || u.username.toLowerCase().indexOf(q) >= 0 || (u.nickname || "").toLowerCase().indexOf(q) >= 0;
+  });
+  if (!rows.length) { $("userRows").innerHTML = '<tr><td colspan="6"><div class="empty">暂无用户</div></td></tr>'; return; }
+  $("userRows").innerHTML = rows.map(function (u) {
+    var adminBadge = u.admin
+      ? '<span class="badge badge-admin"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2 4 4.5.6-3.2 3.2.8 4.4-4.1-2.2-4.1 2.2.8-4.4L5.5 7.1l4.5-.6 2-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>管理员</span>'
+      : '<span class="badge badge-user">普通用户</span>';
+    var status = u.online ? '<span class="badge badge-on">在线</span>' : '<span class="badge badge-off">离线</span>';
+    var actions = '<div class="row-actions">';
+    if (u.admin) {
+      actions += '<button class="mini-btn btn-ghost" data-act="demote" data-id="' + u.id + '">取消管理员</button>';
+    } else {
+      actions += '<button class="mini-btn btn-soft" data-act="promote" data-id="' + u.id + '">设为管理员</button>';
+    }
+    actions += '<button class="mini-btn btn-danger" data-act="delete" data-id="' + u.id + '">删除</button></div>';
+    return '<tr><td><div class="cell-user"><div class="avatar">' + esc((u.nickname || u.username).slice(0, 1).toUpperCase()) +
+      '</div><div><b>' + esc(u.nickname || u.username) + '</b><span>@' + esc(u.username) + '</span></div></div></td>' +
+      '<td>' + adminBadge + '</td><td>' + status + '</td>' +
+      '<td>' + u.friendCount + ' / ' + u.groupCount + '</td>' +
+      '<td class="mono" style="font-size:12px;">' + fmtTime(u.createdAt) + '</td>' +
+      '<td>' + actions + '</td></tr>';
+  }).join("");
+}
+function onUserAction(act, id) {
+  var u = users.find(function (x) { return x.id === id; });
+  if (!u) return;
+  var name = u.nickname || u.username;
+  if (act === "promote") {
+    confirmDialog("设为管理员", "确认将 <b>" + esc(name) + "</b> 提升为管理员？管理员拥有服务端最高权限。").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/users/promote", "POST", { username: u.username }).then(function () {
+        toast("已提升 " + name + " 为管理员"); loadUsers();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  } else if (act === "demote") {
+    confirmDialog("取消管理员", "确认取消 <b>" + esc(name) + "</b> 的管理员身份？").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/users/demote", "POST", { username: u.username }).then(function () {
+        toast("已取消 " + name + " 的管理员"); loadUsers();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  } else if (act === "delete") {
+    confirmDialog("删除用户", "删除 <b>" + esc(name) + "</b> 将同时移除其好友、群聊关系与登录态，且不可恢复。确认删除？").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/users/delete", "POST", { username: u.username }).then(function () {
+        toast("已删除用户 " + name); loadUsers();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  }
+}
+
+/* ============ 群聊 ============ */
+function loadGroups() {
+  api("/api/admin/groups").then(function (d) {
+    var rows = d.groups || [];
+    if (!rows.length) { $("groupRows").innerHTML = '<tr><td colspan="6"><div class="empty">暂无群聊</div></td></tr>'; return; }
+    $("groupRows").innerHTML = rows.map(function (g) {
+      return '<tr><td><div class="cell-user"><div class="avatar" style="background:rgba(122,90,248,.12);color:#7a5af8;">' +
+        esc(g.name.slice(0, 1).toUpperCase()) + '</div><div><b>' + esc(g.name) + '</b></div></div></td>' +
+        '<td class="mono" style="font-weight:700;color:var(--accent-strong);">' + esc(g.code) + '</td>' +
+        '<td>' + esc(g.ownerName || "—") + '</td>' +
+        '<td>' + g.memberCount + ' 人</td>' +
+        '<td class="mono" style="font-size:12px;">' + fmtTime(g.createdAt) + '</td>' +
+        '<td><div class="row-actions">' +
+        '<button class="mini-btn" data-gid="' + g.id + '" data-act="members">成员</button>' +
+        '<button class="mini-btn btn-danger" data-gid="' + g.id + '" data-act="dissolve">解散</button>' +
+        '</div></td></tr>';
+    }).join("");
+  }).catch(function () {});
+}
+
+/* 群成员管理弹窗：成员列表 + 踢人 / 转让群主 / 解散 */
+function showGroupMembers(gid) {
+  api("/api/admin/groups").then(function (d) {
+    var g = (d.groups || []).find(function (x) { return x.id === gid; });
+    if (!g) { toast("群聊不存在", false); return; }
+    var me = token ? "admin" : "";
+    var rows = (g.members || []).map(function (m) {
+      var isOwner = m.id === g.ownerId;
+      var isAdmin = (g.adminIds || []).indexOf(m.id) >= 0;
+      var roleTag = isOwner
+        ? '<span class="role-tag" style="background:rgba(255,185,0,.14);color:#ffb900;">群主</span>'
+        : isAdmin
+          ? '<span class="role-tag" style="background:rgba(122,90,248,.14);color:#7a5af8;">管理员</span>'
+          : "";
+      return '<div class="gm-row"><div class="avatar" style="background:rgba(10,125,191,.12);color:#0a7dbf;">' +
+        esc((m.nickname || m.username).slice(0, 1).toUpperCase()) + '</div>' +
+        '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;">' +
+        '<b style="font-size:13px;">' + esc(m.nickname || m.username) + '</b>' + roleTag + '</div>' +
+        '<div style="font-size:11.5px;color:var(--text2);">@' + esc(m.username) + '</div></div>' +
+        '<div class="row-actions">' +
+        (isOwner ? '<span style="font-size:11px;color:var(--text3);">—</span>' :
+          '<button class="mini-btn" data-gm="' + gid + '" data-uid="' + m.id + '" data-act="kick">踢出</button>' +
+          '<button class="mini-btn" data-gm="' + gid + '" data-uid="' + m.id + '" data-act="transfer">转让</button>') +
+        '</div></div>';
+    }).join("");
+    $("modalTitle").textContent = "群管理 · " + g.name + "（" + g.memberCount + " 人）";
+    $("modalText").innerHTML =
+      '<div style="margin-bottom:10px;font-size:12px;color:var(--text2);">邀请码：<b class="mono" style="color:var(--accent-strong);">' + esc(g.code) + '</b>　群主：' + esc(g.ownerName) + '</div>' +
+      '<div class="gm-list">' + rows + '</div>';
+    $("modalOk").textContent = "关闭";
+    $("modalCancel").style.display = "none";
+    $("modalMask").classList.remove("hidden");
+    var done = function () {
+      $("modalMask").classList.add("hidden");
+      $("modalOk").onclick = null;
+      $("modalCancel").style.display = "";
+      $("gmHandler") && ($("gmHandler").onclick = null);
+    };
+    $("modalOk").onclick = done;
+    $("modalCancel").onclick = done;
+    $("modalText").onclick = function (e) {
+      var b = e.target.closest("[data-gm]");
+      if (!b) return;
+      var act = b.getAttribute("data-act");
+      var uid = b.getAttribute("data-uid");
+      var name = b.closest(".gm-row").querySelector("b").textContent;
+      if (act === "kick") {
+        confirmDialog("踢出成员", "确认将 <b>" + esc(name) + "</b> 移出该群？").then(function (ok) {
+          if (!ok) return;
+          api("/api/admin/groups/kick", "POST", { id: gid, userId: uid }).then(function () {
+            toast("已移出成员"); loadGroups(); showGroupMembers(gid);
+          }).catch(function () { toast("操作失败", false); });
+        });
+      } else if (act === "transfer") {
+        confirmDialog("转让群主", "确认将群主转让给 <b>" + esc(name) + "</b>？").then(function (ok) {
+          if (!ok) return;
+          api("/api/admin/groups/transfer", "POST", { id: gid, userId: uid }).then(function () {
+            toast("群主已转让"); loadGroups(); showGroupMembers(gid);
+          }).catch(function () { toast("操作失败", false); });
+        });
+      }
+    };
+  }).catch(function () { toast("加载失败", false); });
+}
+
+/* ============ 消息 ============ */
+function loadMessages() {
+  var filter = $("msgFilter").value;
+  api("/api/admin/messages?limit=200").then(function (d) {
+    var list = (d.messages || []).filter(function (m) {
+      if (filter === "text") return m.kind === "text";
+      if (filter === "file") return m.kind === "file";
+      return true;
+    });
+    if (!list.length) { $("msgList").innerHTML = '<div class="empty">暂无消息记录</div>'; return; }
+    $("msgList").innerHTML = list.map(function (m) {
+      var tag = m.roomType === "group"
+        ? '<span class="msg-tag">群聊 · ' + esc(m.roomName) + '</span>'
+        : '<span class="msg-tag">私聊</span>';
+      var body = m.kind === "file"
+        ? '<div class="msg-kind"><span class="file-name">' + ICON_FILE + '<span>' + esc(m.file.name) + '</span></span> ' + fmtBytes(m.file.size) + ' · <a class="mono" style="color:var(--accent-strong);" href="' + esc(m.file.url) + '">下载</a></div>'
+        : '<div class="msg-kind">' + esc(m.content) + '</div>';
+      return '<div class="msg-item"><div class="avatar">' + esc(m.senderName.slice(0, 1).toUpperCase()) +
+        '</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;"><b style="font-size:13px;">' + esc(m.senderName) +
+        '</b>' + tag + '<span class="msg-time">' + fmtTime(m.ts) + '</span></div>' + body + '</div></div>';
+    }).join("");
+  }).catch(function () {});
+}
+
+/* ============ 文件 ============ */
+function loadFiles() {
+  api("/api/admin/files").then(function (d) {
+    var list = d.files || [];
+    if (!list.length) { $("fileRows").innerHTML = '<tr><td colspan="6"><div class="empty">暂无文件</div></td></tr>'; return; }
+    $("fileRows").innerHTML = list.map(function (f) {
+      var remain = Math.max(0, f.expiresAt - Date.now());
+      var remainTxt = remain <= 0 ? "已过期" : fmtUptime(remain / 1000);
+      var remainCls = remain <= 0 ? "color:var(--red);" : "color:var(--text2);";
+      return '<tr><td><div class="file-name">' + ICON_FILE + '<span>' + esc(f.name) + '</span></div></td>' +
+        '<td>' + fmtBytes(f.size) + '</td>' +
+        '<td>' + esc(f.ownerName || "—") + '</td>' +
+        '<td class="mono" style="font-size:12px;">' + fmtTime(f.createdAt) + '</td>' +
+        '<td style="' + remainCls + 'font-size:12.5px;font-weight:600;">' + remainTxt + '</td>' +
+        '<td><div class="row-actions"><button class="mini-btn btn-danger" data-fid="' + f.id + '">删除</button></div></td></tr>';
+    }).join("");
+  }).catch(function () {});
+}
+
+/* ============ 系统操作 ============ */
+function broadcast() {
+  var text = $("bcText").value.trim();
+  if (!text) { toast("请输入广播内容", false); return; }
+  $("bcBtn").disabled = true;
+  api("/api/admin/broadcast", "POST", { text: text }).then(function () {
+    toast("广播已发送给所有在线用户");
+    $("bcText").value = "";
+  }).catch(function () { toast("发送失败", false); }).finally(function () { $("bcBtn").disabled = false; });
+}
+function cleanupFiles() {
+  confirmDialog("清理过期文件", "将删除所有已过期（超过 3 天）的文件记录与磁盘文件，且不可恢复。确认执行？").then(function (ok) {
+    if (!ok) return;
+    api("/api/admin/cleanup", "POST", {}).then(function (d) {
+      toast("已清理 " + d.removed + " 个过期文件");
+      loadStats();
+    }).catch(function () { toast("操作失败", false); });
+  });
+}
+function cleanupTokens() {
+  api("/api/admin/cleanup-tokens", "POST", {}).then(function (d) {
+    toast("已清理 " + d.removed + " 个离线登录态");
+    loadStats();
+  }).catch(function () { toast("操作失败", false); });
+}
+
+/* ============ Tab 切换 ============ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".nav-item").forEach(function (n) {
+    n.classList.toggle("active", n.getAttribute("data-tab") === tab);
+  });
+  ["dashboard", "users", "groups", "messages", "files", "system"].forEach(function (t) {
+    $("tab-" + t).classList.toggle("hidden", t !== tab);
+  });
+  var titles = { dashboard: "概览", users: "用户管理", groups: "群聊管理", messages: "消息记录", files: "文件管理", system: "系统操作" };
+  $("pageTitle").textContent = titles[tab];
+  if (tab === "users") loadUsers();
+  if (tab === "groups") loadGroups();
+  if (tab === "messages") loadMessages();
+  if (tab === "files") loadFiles();
+  if (tab === "dashboard") loadStats();
+}
+
+/* ============ 事件绑定 ============ */
+$("loginBtn").onclick = tryLogin;
+$("loginPass").addEventListener("keydown", function (e) { if (e.key === "Enter") tryLogin(); });
+$("logoutBtn").onclick = logout;
+$("nav").addEventListener("click", function (e) {
+  var b = e.target.closest(".nav-item");
+  if (b) switchTab(b.getAttribute("data-tab"));
+});
+$("userSearch").addEventListener("input", renderUsers);
+$("userRefresh").onclick = loadUsers;
+$("msgRefresh").onclick = loadMessages;
+$("msgFilter").onchange = loadMessages;
+$("bcBtn").onclick = broadcast;
+$("cleanFilesBtn").onclick = cleanupFiles;
+$("cleanTokensBtn").onclick = cleanupTokens;
+
+/* 用户表格事件代理 */
+$("userRows").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-act]");
+  if (b) onUserAction(b.getAttribute("data-act"), b.getAttribute("data-id"));
+});
+/* 群聊表格事件代理 */
+$("groupRows").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-act]");
+  if (!b) return;
+  var gid = b.getAttribute("data-gid");
+  var act = b.getAttribute("data-act");
+  if (act === "members") { showGroupMembers(gid); return; }
+  if (act === "dissolve") {
+    confirmDialog("解散群聊", "确认解散该群聊？群成员将立即收到移除通知，聊天记录一并清除。").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/groups/dissolve", "POST", { id: gid }).then(function () {
+        toast("群聊已解散"); loadGroups();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  }
+});
+/* 文件表格事件代理 */
+$("fileRows").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-fid]");
+  if (!b) return;
+  var fid = b.getAttribute("data-fid");
+  confirmDialog("删除文件", "确认删除该文件？下载链接将立即失效，且不可恢复。").then(function (ok) {
+    if (!ok) return;
+    api("/api/admin/files/delete", "POST", { id: fid }).then(function () {
+      toast("文件已删除"); loadFiles();
+    }).catch(function () { toast("操作失败", false); });
+  });
+});
+
+/* ============ 启动 ============ */
+if (token) {
+  api("/api/admin/stats").then(enterApp).catch(function () { logout(); });
+} else {
+  $("login").classList.remove("hidden");
+}
+</script>
+</body>
+</html>
