@@ -13,13 +13,13 @@ const ADMIN_PASSWORD = process.env.ADMIN_KEY || "ayanball-admin";
 let _store = null;
 function store() {
   if (!_store) {
-    const ks = Object.keys(process.env).filter((k) => /NETLIFY|BLOBS/i.test(k));
+    const ks = Object.keys(process.env).filter((k) => /NETLIFY|BLOBS|SITE|TOKEN|DEPLOY/i.test(k));
     console.log("[blobs-env-keys]", ks.join(","));
-    const sid = process.env.NETLIFY_SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID;
-    const tok = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN || process.env.BLOBS_TOKEN;
-    console.log("[blobs-creds]", "siteID=" + (sid ? "set" : "MISSING"), "token=" + (tok ? "set" : "MISSING"));
+    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE;
+    const tok = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN || process.env.BLOBS_TOKEN || process.env.NETLIFY_FUNCTIONS_TOKEN;
+    console.log("[blobs-creds]", "siteID=" + (siteID ? "set:" + siteID : "MISSING"), "token=" + (tok ? "set" : "MISSING"));
     try {
-      _store = getStore({ name: "ayanball" });
+      _store = getStore({ name: "ayanball", ...(siteID ? { siteID } : {}), ...(tok ? { token: tok } : {}) });
     } catch (e) {
       console.log("[blobs-getstore-error]", e.message);
       throw e;
