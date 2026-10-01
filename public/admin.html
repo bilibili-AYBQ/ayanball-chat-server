@@ -214,6 +214,27 @@
   .toast.err svg { color: #ff8a8f; }
   @keyframes pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes slidein { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .tab-view { animation: fadeIn 0.26s ease; }
+  .tab-view.out { opacity: 0; transform: translateY(6px); transition: opacity 0.14s ease, transform 0.14s ease; }
+
+  /* ---------- 封号管理 ---------- */
+  .badge-banned { background: rgba(229, 72, 77, 0.14); color: var(--red); }
+  .badge-muted { background: rgba(217, 130, 43, 0.14); color: var(--amber); }
+  .reason-tag { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text2); background: var(--panel2); border: 1px solid var(--bd); border-radius: 6px; padding: 1px 7px; }
+
+  /* ---------- 反馈 / 举报 ---------- */
+  .rep-card { background: var(--panel); border: 1px solid var(--bd); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden; }
+  .rep-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--bd2); }
+  .rep-head b { font-size: 13.5px; }
+  .rep-body { padding: 14px 18px; }
+  .rep-line { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .rep-evid { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .rep-ev { background: var(--panel2); border: 1px solid var(--bd2); border-radius: 8px; padding: 8px 11px; font-size: 12.5px; color: var(--text2); }
+  .rep-ev b { color: var(--text1); }
+  .rep-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .rep-input { width: 100%; margin-top: 8px; }
+
 </style>
 </head>
 <body>
@@ -272,6 +293,14 @@
       <button class="nav-item" data-tab="files">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5A2.5 2.5 0 016 4h3.2l2 2.4H18A2.5 2.5 0 0120.5 8.9v8.6A2.5 2.5 0 0118 20H6a2.5 2.5 0 01-2.5-2.5v-11z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
         文件管理
+      </button>
+      <button class="nav-item" data-tab="moderation">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="4" y="3.5" width="16" height="13" rx="2.5" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M9 9l2 2 4-4.5M9 13l2 2 4-4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        封号管理
+      </button>
+      <button class="nav-item" data-tab="feedback">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8a2.5 2.5 0 01-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 014 13.5v-8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8h8M8 11.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="18" cy="17" r="3.4" stroke="currentColor" stroke-width="1.7"/><path d="M18 15.5V17M18 18.5v.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        反馈管理
       </button>
       <button class="nav-item" data-tab="system">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 8h9M17 8h3M4 16h3M11 16h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="14.5" cy="8" r="2.3" stroke="currentColor" stroke-width="1.7"/><circle cx="8.5" cy="16" r="2.3" stroke="currentColor" stroke-width="1.7"/></svg>
@@ -375,8 +404,49 @@
         </div>
       </section>
 
+      <!-- ======== 封号管理 ======== -->
+      <section id="tab-moderation" class="hidden tab-view">
+        <div class="toolbar">
+          <input class="input" id="modSearch" placeholder="搜索用户名 / 昵称…" />
+          <button class="btn btn-ghost" id="modRefresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:6px 10px;">
+            <table>
+              <thead><tr>
+                <th>用户</th><th>状态</th><th>封禁原因</th><th>角色</th><th style="text-align:right;">操作</th>
+              </tr></thead>
+              <tbody id="modRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 反馈管理 ======== -->
+      <section id="tab-feedback" class="hidden tab-view">
+        <div class="toolbar">
+          <button class="btn btn-ghost" id="fbRefresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
+          <span class="pill">反馈 <b id="fbCount" style="color:var(--accent-strong);">0</b></span>
+          <span class="pill">待处理举报 <b id="rpPendingCount" style="color:var(--red);">0</b></span>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">用户反馈</div></div>
+          <div class="card-body" style="padding:6px 12px;" id="fbList"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">用户举报 · 需管理员审核</div></div>
+          <div class="card-body" style="padding:14px 18px;" id="repList"></div>
+        </div>
+      </section>
+
       <!-- ======== 系统 ======== -->
-      <section id="tab-system" class="hidden">
+      <section id="tab-system" class="hidden tab-view">
         <div class="card">
           <div class="card-head">
             <div class="card-title">
@@ -787,6 +857,142 @@ function loadFiles() {
   }).catch(function () {});
 }
 
+/* ============ 封号 / 禁言 / 反馈 / 举报 ============ */
+/* 带原因输入框的弹窗（返回空字符串表示取消） */
+function promptDialog(title, text, placeholder) {
+  return new Promise(function (resolve) {
+    $("modalTitle").textContent = title;
+    $("modalText").innerHTML =
+      '<div class="modal-text">' + text + '</div>' +
+      '<input class="input rep-input" id="promptVal" placeholder="' + esc(placeholder || "") + '" />';
+    $("modalOk").textContent = "确认";
+    $("modalMask").classList.remove("hidden");
+    var done = function (v) {
+      $("modalMask").classList.add("hidden");
+      $("modalOk").onclick = null; $("modalCancel").onclick = null;
+      resolve(v);
+    };
+    $("modalOk").onclick = function () { done($("promptVal").value.trim()); };
+    $("modalCancel").onclick = function () { done(""); };
+    setTimeout(function () { var el = $("promptVal"); if (el) el.focus(); }, 60);
+  });
+}
+function loadModeration() {
+  api("/api/admin/users").then(function (d) {
+    users = d.users || [];
+    renderModeration();
+  });
+}
+function renderModeration() {
+  var q = ($("modSearch").value || "").trim().toLowerCase();
+  var rows = users.filter(function (u) {
+    return !q || u.username.toLowerCase().indexOf(q) >= 0 || (u.nickname || "").toLowerCase().indexOf(q) >= 0;
+  });
+  if (!rows.length) { $("modRows").innerHTML = '<tr><td colspan="5"><div class="empty">暂无用户</div></td></tr>'; return; }
+  $("modRows").innerHTML = rows.map(function (u) {
+    var st = u.banned
+      ? '<span class="badge badge-banned">已封号</span>'
+      : u.muted
+        ? '<span class="badge badge-muted">禁言中</span>'
+        : '<span class="badge badge-on">正常</span>';
+    var reason = u.banned
+      ? '<span class="reason-tag" title="' + esc(u.banned.reason) + '">' + esc(u.banned.reason) + '</span>'
+      : u.muted
+        ? '<span class="reason-tag" title="' + esc(u.muted.reason) + '">' + esc(u.muted.reason) + '</span>'
+        : '<span style="color:var(--text3);font-size:12px;">—</span>';
+    var role = u.admin ? '<span class="badge badge-admin">管理员</span>' : '<span class="badge badge-user">普通</span>';
+    var act = '<div class="row-actions">';
+    if (u.banned) act += '<button class="mini-btn btn-soft" data-mod="unban" data-id="' + u.id + '">解封</button>';
+    else act += '<button class="mini-btn btn-danger" data-mod="ban" data-id="' + u.id + '">封号</button>';
+    if (u.muted) act += '<button class="mini-btn btn-soft" data-mod="unmute" data-id="' + u.id + '">解除禁言</button>';
+    else act += '<button class="mini-btn" data-mod="mute" data-id="' + u.id + '">禁言</button>';
+    act += '</div>';
+    return '<tr><td><div class="cell-user"><div class="avatar">' + esc((u.nickname || u.username).slice(0, 1).toUpperCase()) +
+      '</div><div><b>' + esc(u.nickname || u.username) + '</b><span>@' + esc(u.username) + '</span></div></div></td>' +
+      '<td>' + st + '</td><td>' + reason + '</td><td>' + role + '</td><td>' + act + '</td></tr>';
+  }).join("");
+}
+function onModAction(act, id) {
+  var u = users.find(function (x) { return x.id === id; });
+  if (!u) return;
+  var name = u.nickname || u.username;
+  if (act === "ban") {
+    promptDialog("封号", "确认封禁 <b>" + esc(name) + "</b>？被封账号将无法登录，登录时会看到封禁原因。", "请输入封号原因…").then(function (reason) {
+      if (!reason) return;
+      api("/api/admin/ban", "POST", { username: u.username, reason: reason }).then(function () {
+        toast("已封禁 " + name); loadModeration();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  } else if (act === "unban") {
+    confirmDialog("解除封号", "确认解封 <b>" + esc(name) + "</b>？").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/unban", "POST", { username: u.username }).then(function () {
+        toast("已解封 " + name); loadModeration();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  } else if (act === "mute") {
+    promptDialog("禁言", "确认对 <b>" + esc(name) + "</b> 禁言？被禁言账号可正常登录和接收消息，但不能发送消息。", "请输入禁言原因…").then(function (reason) {
+      if (!reason) return;
+      api("/api/admin/mute", "POST", { username: u.username, reason: reason }).then(function () {
+        toast("已禁言 " + name); loadModeration();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  } else if (act === "unmute") {
+    confirmDialog("解除禁言", "确认解除 <b>" + esc(name) + "</b> 的禁言？").then(function (ok) {
+      if (!ok) return;
+      api("/api/admin/unmute", "POST", { username: u.username }).then(function () {
+        toast("已解除禁言 " + name); loadModeration();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  }
+}
+function loadFeedback() {
+  api("/api/admin/feedback").then(function (d) {
+    var list = d.feedback || [];
+    $("fbCount").textContent = list.length;
+    if (!list.length) { $("fbList").innerHTML = '<div class="empty">暂无用户反馈</div>'; return; }
+    $("fbList").innerHTML = list.map(function (f) {
+      return '<div class="msg-item"><div class="avatar">' + esc((f.nickname || f.username).slice(0, 1).toUpperCase()) +
+        '</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;"><b style="font-size:13px;">' + esc(f.nickname || f.username) +
+        '</b><span style="font-size:11px;color:var(--text3);">@' + esc(f.username) + '</span><span class="msg-time">' + fmtTime(f.ts) + '</span></div>' +
+        '<div class="msg-kind">' + esc(f.content) + '</div></div></div>';
+    }).join("");
+  }).catch(function () {});
+  api("/api/admin/reports").then(function (d) {
+    var list = d.reports || [];
+    $("rpPendingCount").textContent = list.filter(function (r) { return r.status === "pending"; }).length;
+    if (!list.length) { $("repList").innerHTML = '<div class="empty">暂无举报</div>'; return; }
+    $("repList").innerHTML = list.map(function (r) {
+      var status = r.status === "resolved"
+        ? '<span class="badge badge-off">已处理(' + (r.action === "ban" ? "封号" : "禁言") + ')</span>'
+        : '<span class="badge badge-banned">待处理</span>';
+      var evid = (r.evidence && r.evidence.length)
+        ? '<div class="rep-evid">' + r.evidence.map(function (e) { return '<div class="rep-ev">' + esc(e) + '</div>'; }).join("") + '</div>'
+        : '';
+      var act = r.status === "pending"
+        ? '<div class="rep-actions"><button class="mini-btn btn-danger" data-rep="' + r.id + '" data-rpact="ban">封号</button><button class="mini-btn" data-rep="' + r.id + '" data-rpact="mute">禁言</button></div>'
+        : '<div class="rep-actions"><span style="font-size:11.5px;color:var(--text3);">' + (r.reason ? '处理原因：' + esc(r.reason) : '') + '</span></div>';
+      return '<div class="rep-card"><div class="rep-head"><div><b>' + esc(r.reporterName) +
+        '</b> <span style="font-size:11px;color:var(--text3);">举报</span> <b style="color:var(--red);">' + esc(r.targetName) + '</b></div>' + status + '</div>' +
+        '<div class="rep-body"><div class="rep-line">' + esc(r.reason) + '</div>' + evid +
+        '<div style="margin-top:8px;font-size:11px;color:var(--text3);">' + fmtTime(r.ts) + '</div>' + act + '</div></div>';
+    }).join("");
+  }).catch(function () {});
+}
+function onRepAction(rid, act) {
+  api("/api/admin/reports").then(function (d) {
+    var r = (d.reports || []).find(function (x) { return x.id === rid; });
+    if (!r) return;
+    var label = act === "ban" ? "封号" : "禁言";
+    promptDialog(label, "处理对 <b>" + esc(r.targetName) + "</b> 的举报，执行" + label + "。", "请输入" + label + "原因…").then(function (reason) {
+      if (!reason) return;
+      api("/api/admin/report-resolve", "POST", { id: rid, action: act, reason: reason }).then(function () {
+        toast("已处理举报"); loadFeedback(); loadModeration();
+      }).catch(function () { toast("操作失败", false); });
+    });
+  });
+}
+
 /* ============ 系统操作 ============ */
 function broadcast() {
   var text = $("bcText").value.trim();
@@ -813,21 +1019,31 @@ function cleanupTokens() {
   }).catch(function () { toast("操作失败", false); });
 }
 
-/* ============ Tab 切换 ============ */
+/* ============ Tab 切换（含淡入淡出动画） ============ */
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll(".nav-item").forEach(function (n) {
     n.classList.toggle("active", n.getAttribute("data-tab") === tab);
   });
-  ["dashboard", "users", "groups", "messages", "files", "system"].forEach(function (t) {
-    $("tab-" + t).classList.toggle("hidden", t !== tab);
+  var tabs = ["dashboard", "users", "groups", "messages", "files", "moderation", "feedback", "system"];
+  tabs.forEach(function (t) {
+    var el = $("tab-" + t);
+    el.classList.toggle("hidden", t !== tab);
+    if (t === tab) {
+      // 重新触发淡入动画
+      el.classList.remove("tab-view");
+      void el.offsetWidth;
+      el.classList.add("tab-view");
+    }
   });
-  var titles = { dashboard: "概览", users: "用户管理", groups: "群聊管理", messages: "消息记录", files: "文件管理", system: "系统操作" };
+  var titles = { dashboard: "概览", users: "用户管理", groups: "群聊管理", messages: "消息记录", files: "文件管理", moderation: "封号管理", feedback: "反馈管理", system: "系统操作" };
   $("pageTitle").textContent = titles[tab];
   if (tab === "users") loadUsers();
   if (tab === "groups") loadGroups();
   if (tab === "messages") loadMessages();
   if (tab === "files") loadFiles();
+  if (tab === "moderation") loadModeration();
+  if (tab === "feedback") loadFeedback();
   if (tab === "dashboard") loadStats();
 }
 
@@ -841,6 +1057,9 @@ $("nav").addEventListener("click", function (e) {
 });
 $("userSearch").addEventListener("input", renderUsers);
 $("userRefresh").onclick = loadUsers;
+$("modSearch").addEventListener("input", renderModeration);
+$("modRefresh").onclick = loadModeration;
+$("fbRefresh").onclick = loadFeedback;
 $("msgRefresh").onclick = loadMessages;
 $("msgFilter").onchange = loadMessages;
 $("bcBtn").onclick = broadcast;
@@ -851,6 +1070,16 @@ $("cleanTokensBtn").onclick = cleanupTokens;
 $("userRows").addEventListener("click", function (e) {
   var b = e.target.closest("[data-act]");
   if (b) onUserAction(b.getAttribute("data-act"), b.getAttribute("data-id"));
+});
+/* 封号表格事件代理 */
+$("modRows").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-mod]");
+  if (b) onModAction(b.getAttribute("data-mod"), b.getAttribute("data-id"));
+});
+/* 举报卡片事件代理 */
+$("repList").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-rep]");
+  if (b) onRepAction(b.getAttribute("data-rep"), b.getAttribute("data-rpact"));
 });
 /* 群聊表格事件代理 */
 $("groupRows").addEventListener("click", function (e) {

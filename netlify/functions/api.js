@@ -108,6 +108,7 @@ exports.handler = async (event) => {
     "group.create", "group.join", "group.leave", "group.setAdmin", "group.kick",
     "group.invite", "group.dissolve", "group.transfer", "message.send",
     "call.offer", "call.answer", "call.ice", "call.hangup", "admin.promote", "ping",
+    "feedback.submit", "report.submit",
   ]);
   const fail = (code) => json(400, { error: code });
 
@@ -154,6 +155,10 @@ exports.handler = async (event) => {
       const password = String(payload.password || "");
       const user = Object.values(users).find((u) => u.username === username);
       if (!user || user.passwordHash !== hashPwd(password, user.salt)) return fail("credential");
+      // 封号检查：被管理员封禁的账号拒绝登录，并返回封禁原因
+      if (user.banned) {
+        return json(403, { error: "banned", reason: user.banned.reason || "", bannedAt: user.banned.at || 0, by: user.banned.by || "" });
+      }
       const t = uid("t_");
       tokens[t] = user.id;
       await writeState("tokens", tokens);
@@ -433,6 +438,10 @@ exports.handler = async (event) => {
 
     // ============ 消息 ============
     if (action === "message.send") {
+      // 禁言检查：被禁言的账号可登录、可接收消息，但不能发送
+      if (me.muted) {
+        return json(403, { error: "muted", reason: me.muted.reason || "", mutedAt: me.muted.at || 0 });
+      }
       const roomId = String(payload.roomId || "");
       const kind = payload.kind === "file" ? "file" : "text";
       const content = String(payload.content || "").slice(0, 5000);
@@ -539,6 +548,47 @@ exports.handler = async (event) => {
       console.log(`[管理员] ${target.username} 由 ${me.username} 提升`);
       await pushTo(target.id, "promoted", { userId: target.id, by: me.username });
       return json(200, {});
+    }
+
+    // ============ 反馈 ============
+    if (action === "feedback.submit") {
+      const content = String(payload.content || "").trim().slice(0, 2000);
+      if (!content) return fail("invalid");
+      const feedback = (await readState("feedback")) || {};
+      const id = uid("f_");
+      feedback[id] = { id, userId, username: me.username, nickname: me.nickname || me.username, content, ts: Date.now() };
+      await writeState("feedback", feedback);
+      console.log(`[反馈] ${me.username}: ${content.slice(0, 60)}`);
+      return json(200, { id });
+    }
+
+    // ============ 举报 ============
+    if (action === "report.submit") {
+      const targetId = String(payload.targetId || "");
+      const target = users[targetId];
+      if (!target) return fail("not-found");
+      if (targetId === userId) return fail("cannot-report-self");
+      const reason = String(payload.reason || "").trim().slice(0, 500);
+      const evidence = Array.isArray(payload.evidence)
+        ? payload.evidence.slice(0, 20).map((s) => String(s || "").slice(0, 300)).filter(Boolean)
+        : [];
+      if (!reason) return fail("invalid");
+      const reports = (await readState("reports")) || {};
+      const id = uid("rp_");
+      reports[id] = {
+        id,
+        reporterId: userId,
+        reporterName: me.nickname || me.username,
+        targetId,
+        targetName: target.nickname || target.username,
+        reason,
+        evidence,
+        status: "pending",
+        ts: Date.now(),
+      };
+      await writeState("reports", reports);
+      console.log(`[举报] ${me.username} 举报 ${target.username}: ${reason.slice(0, 60)}`);
+      return json(200, { id });
     }
 
     return json(404, { error: "unknown-action" });

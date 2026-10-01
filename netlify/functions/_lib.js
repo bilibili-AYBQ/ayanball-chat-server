@@ -72,7 +72,12 @@ function safeName(name) {
 }
 function publicUser(u) {
   if (!u) return null;
-  return { id: u.id, username: u.username, nickname: u.nickname, avatar: u.avatar || "p1", admin: !!u.admin, createdAt: u.createdAt };
+  return {
+    id: u.id, username: u.username, nickname: u.nickname, avatar: u.avatar || "p1",
+    admin: !!u.admin, createdAt: u.createdAt,
+    banned: u.banned || null, // { at, reason, by }
+    muted: u.muted || null,   // { at, reason, by }
+  };
 }
 function avatarOf(u) {
   return u ? u.avatar || "p1" : "p1";

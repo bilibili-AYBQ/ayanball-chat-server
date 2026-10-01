@@ -95,6 +95,8 @@ exports.handler = async (event) => {
       username: u.username,
       nickname: u.nickname,
       admin: !!u.admin,
+      banned: u.banned || null,
+      muted: u.muted || null,
       createdAt: u.createdAt,
       online: online.has(u.id),
       friendCount: friendCounts[u.id] || 0,
@@ -125,6 +127,74 @@ exports.handler = async (event) => {
     if (!u) return json(404, { error: "not-found" });
     await deleteUserCompletely(u.id);
     return json(200, {});
+  }
+
+  // ---- 封号 / 禁言 ----
+  if (method === "POST" && (pathPart === "ban" || pathPart === "mute")) {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    const reason = String(body.reason || "").trim().slice(0, 300) || "管理员操作";
+    if (pathPart === "ban") {
+      u.banned = { at: Date.now(), reason, by: "admin" };
+      u.muted = null;
+    } else {
+      u.muted = { at: Date.now(), reason, by: "admin" };
+      u.banned = null;
+    }
+    await writeState("users", users);
+    await pushUser(u.id, pathPart === "ban" ? "banned" : "muted", { reason });
+    console.log(`[封禁] ${pathPart === "ban" ? "封号" : "禁言"} ${u.username}: ${reason}`);
+    return json(200, {});
+  }
+
+  if (method === "POST" && (pathPart === "unban" || pathPart === "unmute")) {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    if (pathPart === "unban") u.banned = null;
+    else u.muted = null;
+    await writeState("users", users);
+    await pushUser(u.id, pathPart === "unban" ? "unbanned" : "unmuted", {});
+    console.log(`[封禁] 解除${pathPart === "unban" ? "封号" : "禁言"} ${u.username}`);
+    return json(200, {});
+  }
+
+  // ---- 举报处理 ----
+  if (method === "POST" && pathPart === "report-resolve") {
+    const reports = (await readState("reports")) || {};
+    const rp = reports[String(body.id || "")];
+    if (!rp) return json(404, { error: "not-found" });
+    const action = String(body.action || "");
+    if (action !== "ban" && action !== "mute") return json(400, { error: "bad-action" });
+    const reason = String(body.reason || "").trim().slice(0, 300) || "经举报审核";
+    const target = users[rp.targetId];
+    if (target) {
+      if (action === "ban") {
+        target.banned = { at: Date.now(), reason, by: "admin" };
+        target.muted = null;
+      } else {
+        target.muted = { at: Date.now(), reason, by: "admin" };
+        target.banned = null;
+      }
+      await writeState("users", users);
+      await pushUser(target.id, action === "ban" ? "banned" : "muted", { reason });
+    }
+    rp.status = "resolved";
+    rp.action = action;
+    rp.reason = reason;
+    rp.handledAt = Date.now();
+    await writeState("reports", reports);
+    return json(200, {});
+  }
+
+  // ---- 反馈 / 举报列表 ----
+  if (method === "GET" && pathPart === "feedback") {
+    const list = Object.values((await readState("feedback")) || {}).sort((a, b) => b.ts - a.ts);
+    return json(200, { feedback: list });
+  }
+
+  if (method === "GET" && pathPart === "reports") {
+    const list = Object.values((await readState("reports")) || {}).sort((a, b) => b.ts - a.ts);
+    return json(200, { reports: list });
   }
 
   // ---- 群聊 ----

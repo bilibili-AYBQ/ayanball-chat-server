@@ -79,7 +79,7 @@ function hashPwd(password, salt) {
 }
 function publicUser(u) {
   if (!u) return null;
-  return { id: u.id, username: u.username, nickname: u.nickname, avatar: u.avatar || "p1", admin: !!u.admin, createdAt: u.createdAt };
+  return { id: u.id, username: u.username, nickname: u.nickname, avatar: u.avatar || "p1", admin: !!u.admin, createdAt: u.createdAt, banned: u.banned || null, muted: u.muted || null };
 }
 function avatarOf(u) {
   return u ? u.avatar || "p1" : "p1";
@@ -698,6 +698,10 @@ function handleRequest(ws, userId, action, payload, reply, reqId) {
       const password = String(payload.password || "");
       const user = Object.values(state.users).find((u) => u.username === username);
       if (!user || user.passwordHash !== hashPwd(password, user.salt)) return fail("credential");
+      // 封号检查：被封禁的账号拒绝登录，并返回封禁原因
+      if (user.banned) {
+        return reply({ error: "banned", reason: user.banned.reason || "", bannedAt: user.banned.at || 0, by: user.banned.by || "" });
+      }
       const token = uid("t_");
       state.tokens[token] = user.id;
       bindWs(ws, user.id);
@@ -994,6 +998,11 @@ function handleRequest(ws, userId, action, payload, reply, reqId) {
 
     // ============ 消息 ============
     case "message.send": {
+      const me2 = state.users[userId];
+      // 禁言检查：被禁言可登录、可接收，但不能发送
+      if (me2 && me2.muted) {
+        return reply({ error: "muted", reason: me2.muted.reason || "", mutedAt: me2.muted.at || 0 });
+      }
       const roomId = String(payload.roomId || "");
       const me = state.users[userId];
       if (!me) return fail("unauthorized");
@@ -1108,6 +1117,51 @@ function handleRequest(ws, userId, action, payload, reply, reqId) {
       console.log(`[管理员] ${target.username} 由 ${me.username} 提升`);
       pushTo(target.id, "promoted", { userId: target.id, by: me.username });
       reply({});
+      break;
+    }
+
+    // ============ 反馈 ============
+    case "feedback.submit": {
+      const me3 = state.users[userId];
+      const content = String(payload.content || "").trim().slice(0, 2000);
+      if (!content) return fail("invalid");
+      state.feedback = state.feedback || {};
+      const id = uid("f_");
+      state.feedback[id] = { id, userId, username: me3.username, nickname: me3.nickname || me3.username, content, ts: Date.now() };
+      persist();
+      console.log(`[反馈] ${me3.username}: ${content.slice(0, 60)}`);
+      reply({ id });
+      break;
+    }
+
+    // ============ 举报 ============
+    case "report.submit": {
+      const me4 = state.users[userId];
+      const targetId = String(payload.targetId || "");
+      const target = state.users[targetId];
+      if (!target) return fail("not-found");
+      if (targetId === userId) return fail("cannot-report-self");
+      const reason = String(payload.reason || "").trim().slice(0, 500);
+      const evidence = Array.isArray(payload.evidence)
+        ? payload.evidence.slice(0, 20).map((s) => String(s || "").slice(0, 300)).filter(Boolean)
+        : [];
+      if (!reason) return fail("invalid");
+      state.reports = state.reports || {};
+      const rid = uid("rp_");
+      state.reports[rid] = {
+        id: rid,
+        reporterId: userId,
+        reporterName: me4.nickname || me4.username,
+        targetId,
+        targetName: target.nickname || target.username,
+        reason,
+        evidence,
+        status: "pending",
+        ts: Date.now(),
+      };
+      persist();
+      console.log(`[举报] ${me4.username} 举报 ${target.username}: ${reason.slice(0, 60)}`);
+      reply({ id: rid });
       break;
     }
 
