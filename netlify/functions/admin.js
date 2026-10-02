@@ -392,7 +392,7 @@ exports.handler = async (event) => {
     const size = Number(body.size) || 0;
     if (size > 50 * 1024 * 1024) return json(413, { error: "too-large" });
     const hasZip = size > 0; // 传了 zip 才有安装包；否则仅设置当前版本号
-    const blobKey = "blob:update:zip";
+    const blobKey = "updatezip";
     let uploadUrl = null;
     if (hasZip) {
       try { await store().delete(blobKey); } catch { /* ignore */ }
@@ -418,7 +418,7 @@ exports.handler = async (event) => {
   // ---- 清除已发布更新（撤销发布） ----
   if (method === "DELETE" && pathPart === "update") {
     await writeState("update:meta", null);
-    try { await store().delete("blob:update:zip"); } catch { /* ignore */ }
+    try { await store().delete("updatezip"); } catch { /* ignore */ }
     console.log("[更新清除] by admin");
     return json(200, { ok: true });
   }

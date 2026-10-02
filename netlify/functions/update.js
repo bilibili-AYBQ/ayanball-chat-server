@@ -15,7 +15,7 @@ exports.handler = async (event) => {
   const wantDownload = String(event.queryStringParameters?.download || "") === "1";
   if (wantDownload) {
     try {
-      const signed = await store().getSignedUrl("blob:update:zip", { expire: 600 });
+      const signed = await store().getSignedUrl("updatezip", { expire: 600 });
       return json(200, {
         url: signed,
         version: meta.version,
