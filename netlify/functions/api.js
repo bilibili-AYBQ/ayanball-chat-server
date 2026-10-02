@@ -104,7 +104,7 @@ exports.handler = async (event) => {
   // 需要登录的 action 统一校验
   const authedActions = new Set([
     "auth", "friend.search", "friend.request", "friend.accept", "friend.reject",
-    "friend.remove", "profile.setAvatar", "block.add", "block.remove",
+    "friend.remove", "profile.setAvatar", "profile.setNickname", "block.add", "block.remove",
     "group.create", "group.join", "group.leave", "group.setAdmin", "group.kick",
     "group.invite", "group.dissolve", "group.transfer", "message.send",
     "call.offer", "call.answer", "call.ice", "call.hangup", "admin.promote", "ping",
@@ -135,7 +135,7 @@ exports.handler = async (event) => {
         id: uid("u_"),
         username,
         nickname: String(payload.nickname || "").trim() || username,
-        avatar: String(payload.avatar || "p1").slice(0, 400),
+        avatar: String(payload.avatar || "p1").slice(0, 20000),
         passwordHash: hashPwd(password, salt),
         salt,
         admin: isFirst,
@@ -248,8 +248,21 @@ exports.handler = async (event) => {
     }
 
     // ============ 个人资料 ============
+    if (action === "profile.setNickname") {
+      const raw = String(payload.nickname || "").trim().slice(0, 32);
+      if (!raw) return fail("invalid");
+      me.nickname = raw;
+      await writeState("users", users);
+      const myId = userId;
+      for (const otherId of Object.keys(users)) {
+        const fs = await loadFriends(otherId);
+        if (fs.includes(myId)) await pushTo(otherId, "profile.updated", { user: publicUser(me) });
+      }
+      return json(200, { user: publicUser(me) });
+    }
+
     if (action === "profile.setAvatar") {
-      const raw = String(payload.avatar || "").slice(0, 400);
+      const raw = String(payload.avatar || "").slice(0, 20000);
       if (!raw) return fail("invalid");
       me.avatar = raw;
       await writeState("users", users);

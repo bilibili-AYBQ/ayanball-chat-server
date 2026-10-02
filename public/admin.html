@@ -339,6 +339,25 @@
 
       <!-- ======== 用户 ======== -->
       <section id="tab-users" class="hidden">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+          <div class="card">
+            <div class="card-title">注册用户 <span class="dim">（用户注册不了时，服主辅助注册）</span></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+              <input class="input" id="cUsername" placeholder="用户名（≥2 字符）" />
+              <input class="input" id="cNickname" placeholder="昵称（可留空）" />
+              <input class="input" id="cPassword" type="password" placeholder="密码（≥6 位）" />
+              <button class="btn btn-primary" id="cCreate">注册账号</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">修改密码 <span class="dim">（忘记密码找回时使用）</span></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+              <input class="input" id="pUsername" placeholder="目标用户名" />
+              <input class="input" id="pPassword" type="password" placeholder="新密码（≥6 位）" />
+              <button class="btn btn-primary" id="pSet">重置密码</button>
+            </div>
+          </div>
+        </div>
         <div class="toolbar">
           <input class="input" id="userSearch" placeholder="搜索用户名 / 昵称…" />
           <button class="btn btn-ghost" id="userRefresh">
@@ -1057,6 +1076,24 @@ $("nav").addEventListener("click", function (e) {
 });
 $("userSearch").addEventListener("input", renderUsers);
 $("userRefresh").onclick = loadUsers;
+
+/* 服主辅助注册 + 修改密码 */
+$("cCreate").onclick = function () {
+  var username = $("cUsername").value.trim(), nickname = $("cNickname").value.trim(), password = $("cPassword").value;
+  if (username.length < 2) return toast("用户名至少 2 个字符");
+  if (password.length < 6) return toast("密码至少 6 位");
+  api("/api/admin/users/create", "POST", { username: username, password: password, nickname: nickname }).then(function () {
+    toast("已注册用户 " + username); $("cUsername").value = ""; $("cNickname").value = ""; $("cPassword").value = ""; loadUsers();
+  }).catch(function (e) { toast(e.error === "taken" ? "该用户名已存在" : "注册失败：" + (e.error || "")); });
+};
+$("pSet").onclick = function () {
+  var username = $("pUsername").value.trim(), password = $("pPassword").value;
+  if (!username) return toast("请输入目标用户名");
+  if (password.length < 6) return toast("新密码至少 6 位");
+  api("/api/admin/users/setpassword", "POST", { username: username, password: password }).then(function () {
+    toast("已重置 " + username + " 的密码"); $("pPassword").value = ""; loadUsers();
+  }).catch(function (e) { toast(e.error === "not-found" ? "未找到该用户" : "重置失败：" + (e.error || "")); });
+};
 $("modSearch").addEventListener("input", renderModeration);
 $("modRefresh").onclick = loadModeration;
 $("fbRefresh").onclick = loadFeedback;

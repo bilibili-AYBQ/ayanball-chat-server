@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_*）
 const Pusher = require("pusher");
 const {
-  store, readState, writeState, mutate, uid, avatarOf, json, readBody,
+  store, readState, writeState, mutate, uid, avatarOf, json, readBody, hashPwd,
   ADMIN_PASSWORD,
 } = require("./_lib.js");
 
@@ -126,6 +126,44 @@ exports.handler = async (event) => {
     const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
     if (!u) return json(404, { error: "not-found" });
     await deleteUserCompletely(u.id);
+    return json(200, {});
+  }
+
+  // ---- 服主辅助注册（用户注册不了时） ----
+  if (method === "POST" && pathPart === "create") {
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "");
+    if (username.length < 2 || password.length < 6) return json(400, { error: "invalid" });
+    if (Object.values(users).some((x) => x.username === username)) return json(409, { error: "taken" });
+    const salt = uid("s_");
+    const user = {
+      id: uid("u_"),
+      username,
+      nickname: String(body.nickname || "").trim() || username,
+      avatar: "p1",
+      passwordHash: hashPwd(password, salt),
+      salt,
+      admin: Object.keys(users).length === 0,
+      createdAt: Date.now(),
+      createdBy: "admin",
+    };
+    users[user.id] = user;
+    await writeState("users", users);
+    console.log(`[管理面板] 辅助注册 ${username}`);
+    return json(200, { user: { id: user.id, username: user.username, nickname: user.nickname } });
+  }
+
+  // ---- 修改他人密码（忘记密码找回） ----
+  if (method === "POST" && pathPart === "setpassword") {
+    const u = Object.values(users).find((x) => x.username === String(body.username || "").trim());
+    if (!u) return json(404, { error: "not-found" });
+    const password = String(body.password || "");
+    if (password.length < 6) return json(400, { error: "invalid" });
+    u.salt = uid("s_");
+    u.passwordHash = hashPwd(password, u.salt);
+    await writeState("users", users);
+    await pushUser(u.id, "password-changed", {});
+    console.log(`[管理面板] 重置密码 ${u.username}`);
     return json(200, {});
   }
 
