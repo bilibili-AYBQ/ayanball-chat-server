@@ -400,7 +400,7 @@ exports.handler = async (event) => {
         uploadUrl = await store().createUploadUrl(blobKey, { expire: 1800 });
       } catch (e) {
         console.error("[update createUploadUrl]", e.message);
-        return json(500, { error: "upload-unavailable" });
+        return json(500, { error: "upload-unavailable", detail: String((e && e.message) || e) });
       }
     }
     await writeState("update:meta", {
