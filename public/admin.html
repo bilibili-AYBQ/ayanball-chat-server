@@ -1071,32 +1071,57 @@ $("upFile").addEventListener("change", function () {
   $("upBtn").disabled = !$("upVer").value.trim();
 });
 $("upVer").addEventListener("input", function () { $("upBtn").disabled = !$("upVer").value.trim(); });
+function fileToBase64(blob) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () { resolve(String(r.result).split(",")[1]); };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
 $("upBtn").onclick = function () {
   var version = $("upVer").value.trim();
   if (!version) { toast("请填写版本号", false); return; }
   if (upFile && upFile.size > 50 * 1024 * 1024) { toast("zip 不能超过 50MB", false); return; }
   $("upBtn").disabled = true;
-  $("upStatus").textContent = "获取上传地址…";
-  api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim(), name: upFile ? upFile.name : "ayanball-update.zip", size: upFile ? upFile.size : 0 })
+  if (!upFile) {
+    // 仅设置当前版本（不上传 zip）
+    api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim() })
+      .then(function () {
+        $("upStatus").textContent = "已设置当前版本 v" + version + "（未附安装包）";
+        toast("当前版本已更新"); loadUpdate();
+      })
+      .catch(function () { toast("发布失败", false); })
+      .finally(function () { $("upBtn").disabled = false; });
+    return;
+  }
+  // 分块上传 zip
+  $("upStatus").textContent = "创建上传会话…";
+  api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim(), name: upFile.name, size: upFile.size })
     .then(function (d) {
-      if (upFile && d.uploadUrl) {
-        $("upStatus").textContent = "上传安装包…";
-        return fetch(d.uploadUrl, { method: "PUT", body: upFile }).then(function (r) {
-          if (!r.ok) throw new Error("上传失败");
-          return d;
+      var chunkSize = d.chunkSize || (3 * 1024 * 1024);
+      var total = d.totalChunks || Math.max(1, Math.ceil(upFile.size / chunkSize));
+      var uploadId = d.uploadId;
+      var i = 0;
+      function next() {
+        if (i >= total) return api("/api/admin/update/finalize", "POST", { uploadId: uploadId });
+        var start = i * chunkSize;
+        var end = Math.min(upFile.size, start + chunkSize);
+        return fileToBase64(upFile.slice(start, end)).then(function (b64) {
+          $("upStatus").textContent = "上传分块 " + (i + 1) + "/" + total + "…";
+          return api("/api/admin/update/chunk", "POST", { uploadId: uploadId, index: i, data: b64 })
+            .then(function () { i++; return next(); });
         });
       }
-      return d;
+      return next();
     })
     .then(function () {
-      $("upStatus").textContent = upFile
-        ? "发布成功（含安装包）！客户端将自动检测到 v" + $("upVer").value.trim()
-        : "已设置当前版本 v" + $("upVer").value.trim() + "（未附安装包）";
-      toast(upFile ? "更新已发布" : "当前版本已更新");
+      $("upStatus").textContent = "发布成功（含安装包）！客户端将自动检测到 v" + version;
+      toast("更新已发布");
       $("upFile").value = ""; $("upFileText").textContent = "选择 zip 安装包（≤50MB，可不选仅设版本）"; upFile = null;
       loadUpdate();
     })
-    .catch(function (e) { $("upStatus").textContent = "发布失败：" + e.message; toast("发布失败", false); })
+    .catch(function (e) { $("upStatus").textContent = "发布失败：" + ((e && e.message) || "网络错误"); toast("发布失败", false); })
     .finally(function () { $("upBtn").disabled = !$("upVer").value.trim(); });
 };
 $("upClearBtn").onclick = function () {

@@ -10,6 +10,7 @@ const {
 
 const ADMIN_TOKEN_TTL = 12 * 3600 * 1000; // 管理面板会话 12 小时
 const ONLINE_WINDOW_MS = 60000; // HTTP 心跳在线窗口
+const UPDATE_CHUNK = 3 * 1024 * 1024; // 更新包分块上传/下载的块大小（原始字节，base64 后约 4MB，落在函数请求限制内）
 
 let _pusher = null;
 function pusherClient() {
@@ -385,34 +386,76 @@ exports.handler = async (event) => {
     return json(200, { sent: online.length });
   }
 
-  // ---- 更新发布（上传新版 zip，存 Blob，供客户端自动更新） ----
+  // ---- 更新发布（分块上传 zip 到 Blobs，供客户端自动更新） ----
+  // 因 Netlify Blobs 无预签名 URL，采用分块上传：POST update 建会话 → POST chunk 传块 → POST finalize 合并
   if (method === "POST" && pathPart === "update") {
     const version = String(body.version || "").trim();
     if (!/^[\w.\-]+$/.test(version)) return json(400, { error: "bad-version" });
     const size = Number(body.size) || 0;
     if (size > 50 * 1024 * 1024) return json(413, { error: "too-large" });
-    const hasZip = size > 0; // 传了 zip 才有安装包；否则仅设置当前版本号
-    const blobKey = "updatezip";
-    let uploadUrl = null;
-    if (hasZip) {
-      try { await store().delete(blobKey); } catch { /* ignore */ }
-      try {
-        uploadUrl = await store().createUploadUrl(blobKey, { expire: 1800 });
-      } catch (e) {
-        console.error("[update createUploadUrl]", e.message);
-        return json(500, { error: "upload-unavailable", detail: String((e && e.message) || e) });
-      }
+    const hasZip = size > 0;
+    if (!hasZip) {
+      // 仅设置当前版本号（不上传 zip）
+      await writeState("update:meta", {
+        version,
+        notes: String(body.notes || "").slice(0, 1000),
+        name: "ayanball-update.zip",
+        size: 0, hasZip: false,
+        uploadedAt: Date.now(),
+        downloadUrl: "/.netlify/functions/update?download=1",
+      });
+      console.log(`[更新发布] v${version}（仅设版本） by admin`);
+      return json(200, { ok: true, hasZip: false });
     }
-    await writeState("update:meta", {
-      version,
+    // 有 zip：开启分块上传会话
+    const uploadId = uid("u_");
+    const totalChunks = Math.max(1, Math.ceil(size / UPDATE_CHUNK));
+    await writeState(`update:draft:${uploadId}`, {
+      uploadId, version,
       notes: String(body.notes || "").slice(0, 1000),
       name: String(body.name || "ayanball-update.zip"),
-      size, hasZip,
-      uploadedAt: Date.now(),
+      size, totalChunks, uploaded: 0,
+    });
+    console.log(`[更新发布] v${version} 分块会话 ${uploadId}（${totalChunks} 块） by admin`);
+    return json(200, { ok: true, hasZip: true, uploadId, chunkSize: UPDATE_CHUNK, totalChunks });
+  }
+
+  // ---- 上传单个分块（base64，每块原始 ≤3MB） ----
+  if (method === "POST" && pathPart === "chunk") {
+    const { uploadId, index, data } = body;
+    const draft = await readState(`update:draft:${uploadId}`);
+    if (!draft) return json(404, { error: "no-draft" });
+    if (typeof data !== "string" || !data) return json(400, { error: "no-data" });
+    const idx = Number(index);
+    if (Number.isNaN(idx) || idx < 0 || idx >= draft.totalChunks) return json(400, { error: "bad-index" });
+    await store().set(`updatec:${uploadId}:${idx}`, Buffer.from(data, "base64"));
+    draft.uploaded = (draft.uploaded || 0) + 1;
+    await writeState(`update:draft:${uploadId}`, draft);
+    return json(200, { ok: true, index: idx, uploaded: draft.uploaded, total: draft.totalChunks });
+  }
+
+  // ---- 合并分块，写入 updatezip blob 并发布 ----
+  if (method === "POST" && pathPart === "finalize") {
+    const uploadId = String(body.uploadId || "");
+    const draft = await readState(`update:draft:${uploadId}`);
+    if (!draft) return json(404, { error: "no-draft" });
+    const parts = [];
+    for (let i = 0; i < draft.totalChunks; i++) {
+      const raw = await store().get(`updatec:${uploadId}:${i}`, { type: "arrayBuffer" });
+      if (raw == null) return json(400, { error: "missing-chunk-" + i });
+      parts.push(Buffer.from(raw));
+    }
+    const buf = Buffer.concat(parts);
+    await store().set("updatezip", buf);
+    for (let i = 0; i < draft.totalChunks; i++) { try { await store().delete(`updatec:${uploadId}:${i}`); } catch { /* ignore */ } }
+    await writeState(`update:draft:${uploadId}`, null);
+    await writeState("update:meta", {
+      version: draft.version, notes: draft.notes, name: draft.name,
+      size: draft.size, hasZip: true, uploadedAt: Date.now(),
       downloadUrl: "/.netlify/functions/update?download=1",
     });
-    console.log(`[更新发布] v${version}${hasZip ? "（含安装包）" : ""} by admin`);
-    return json(200, { uploadUrl, version, downloadUrl: "/.netlify/functions/update?download=1", hasZip });
+    console.log(`[更新发布] v${draft.version}（含安装包 ${draft.size} 字节） by admin`);
+    return json(200, { ok: true, version: draft.version, size: draft.size });
   }
 
   // ---- 清除已发布更新（撤销发布） ----
