@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_* 个人事件 / private-conv_* 消息 / private-call_* 通话信令）
 const Pusher = require("pusher");
 const {
-  readState, writeState, mutate, uid, hashPwd, publicUser, avatarOf,
+  readState, writeState, mutate, uid, hashPwd, publicUser, avatarOf, genAbcId,
   roomKeyFor, preview, groupPayload, groupRole, resolveRoomsFor,
   json, readBody, authed,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS,
@@ -134,6 +134,7 @@ exports.handler = async (event) => {
       const user = {
         id: uid("u_"),
         username,
+        abcId: genAbcId(Object.values(users).map((u) => u.abcId).filter(Boolean)), // 唯一 ABC 号，冲突自动重生成
         nickname: String(payload.nickname || "").trim() || username,
         avatar: String(payload.avatar || "p1").slice(0, 20000),
         passwordHash: hashPwd(password, salt),
@@ -158,6 +159,11 @@ exports.handler = async (event) => {
       // 封号检查：被管理员封禁的账号拒绝登录，并返回封禁原因
       if (user.banned) {
         return json(403, { error: "banned", reason: user.banned.reason || "", bannedAt: user.banned.at || 0, by: user.banned.by || "" });
+      }
+      // 老账号若没有 ABC 号则补发唯一号（注册更早的用户）
+      if (!user.abcId) {
+        user.abcId = genAbcId(Object.values(users).map((u) => u.abcId).filter(Boolean));
+        await writeState("users", users);
       }
       const t = uid("t_");
       tokens[t] = user.id;
@@ -194,7 +200,16 @@ exports.handler = async (event) => {
     // ============ 好友 ============
     if (action === "friend.search") {
       const q = String(payload.username || "").trim();
-      const target = Object.values(users).find((u) => u.username === q && u.id !== userId);
+      if (!q) return fail("invalid");
+      const ql = q.toLowerCase();
+      // 支持：用户名 / 昵称 / ABC 号 匹配
+      const target = Object.values(users).find(
+        (u) => u.id !== userId && (
+          u.username.toLowerCase() === ql ||
+          u.nickname.toLowerCase() === ql ||
+          (u.abcId && u.abcId.toUpperCase() === q.toUpperCase())
+        ),
+      );
       if (!target) return fail("not-found");
       return json(200, { user: publicUser(target) });
     }

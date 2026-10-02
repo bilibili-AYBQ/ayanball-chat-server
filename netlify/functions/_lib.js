@@ -70,11 +70,23 @@ function hashPwd(password, salt) {
 function safeName(name) {
   return String(name || "file").replace(/[^\w.\u4e00-\u9fa5-]/g, "_").slice(0, 120);
 }
+/** 生成唯一 ABC 号：6 位大写字母+数字（去掉易混的 0/O/1/I） */
+function genAbcId(existing = []) {
+  const pool = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const set = new Set(existing.map((v) => String(v).toUpperCase()));
+  for (let attempt = 0; attempt < 200; attempt++) {
+    let s = "";
+    for (let i = 0; i < 6; i++) s += pool[Math.floor(Math.random() * pool.length)];
+    if (!set.has(s)) return s;
+  }
+  return "A" + Date.now().toString(36).toUpperCase().slice(-5);
+}
 function publicUser(u) {
   if (!u) return null;
   return {
     id: u.id, username: u.username, nickname: u.nickname, avatar: u.avatar || "p1",
     admin: !!u.admin, createdAt: u.createdAt,
+    abcId: u.abcId || "", // 唯一 ABC 号
     banned: u.banned || null, // { at, reason, by }
     muted: u.muted || null,   // { at, reason, by }
   };
@@ -199,7 +211,7 @@ function authed(event) {
 }
 
 module.exports = {
-  store, readState, writeState, mutate, uid, hashPwd, safeName,
+  store, readState, writeState, mutate, uid, hashPwd, safeName, genAbcId,
   publicUser, avatarOf, roomKeyFor, preview, groupPayload, groupRole,
   resolveRoomsFor, json, readBody, authed,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS, ADMIN_PASSWORD,

@@ -302,6 +302,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8a2.5 2.5 0 01-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 014 13.5v-8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8h8M8 11.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="18" cy="17" r="3.4" stroke="currentColor" stroke-width="1.7"/><path d="M18 15.5V17M18 18.5v.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         反馈管理
       </button>
+      <button class="nav-item" data-tab="update">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5.5 3.5h9a2 2 0 012 2v4.2M5.5 20.5h9a2 2 0 002-2v-4.2M15 4.5l3.5 3.2L15 10M5.5 14.5L9 10.2 5.5 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        更新发布
+      </button>
       <button class="nav-item" data-tab="system">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 8h9M17 8h3M4 16h3M11 16h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="14.5" cy="8" r="2.3" stroke="currentColor" stroke-width="1.7"/><circle cx="8.5" cy="16" r="2.3" stroke="currentColor" stroke-width="1.7"/></svg>
         系统操作
@@ -461,6 +465,32 @@
         <div class="card">
           <div class="card-head"><div class="card-title">用户举报 · 需管理员审核</div></div>
           <div class="card-body" style="padding:14px 18px;" id="repList"></div>
+        </div>
+      </section>
+
+      <!-- ======== 更新发布 ======== -->
+      <section id="tab-update" class="hidden tab-view">
+        <div class="card">
+          <div class="card-head"><div class="card-title">发布新版本</div></div>
+          <div class="card-body" style="padding:16px 18px;">
+            <div style="display:flex;gap:12px;margin-bottom:12px;">
+              <input class="input" id="upVer" placeholder="版本号（如 1.2.0）" style="max-width:200px;" />
+              <input class="input" id="upNotes" placeholder="更新说明（选填）" style="flex:1;" />
+            </div>
+            <label class="up-file" id="upFileLabel" style="display:flex;align-items:center;gap:10px;cursor:pointer;border:1.5px dashed var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M7 9l5-5 5 5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="upFileText" style="font-size:13px;color:var(--text2);">选择 zip 安装包（≤50MB）</span>
+            </label>
+            <input type="file" id="upFile" accept=".zip,application/zip,application/x-zip-compressed" hidden />
+            <div id="upStatus" style="margin-bottom:12px;font-size:13px;color:var(--text2);min-height:18px;"></div>
+            <div style="display:flex;justify-content:flex-end;">
+              <button class="btn btn-primary" id="upBtn" disabled>发布更新</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">当前已发布</div></div>
+          <div class="card-body" style="padding:14px 18px;" id="upMeta">加载中…</div>
         </div>
       </section>
 
@@ -1012,6 +1042,56 @@ function onRepAction(rid, act) {
   });
 }
 
+/* ============ 更新发布 ============ */
+function fmtSize(n) {
+  if (!n) return "0 B";
+  if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
+  return (n / 1024 / 1024).toFixed(2) + " MB";
+}
+function loadUpdate() {
+  fetch("/.netlify/functions/update").then(function (res) {
+    if (res.status === 404) { $("upMeta").innerHTML = '<div class="empty">尚未发布任何版本</div>'; return null; }
+    return res.json();
+  }).then(function (d) {
+    if (!d) return;
+    $("upMeta").innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+      '<div><b style="font-size:14px;color:var(--accent-strong);">v' + esc(d.version) + '</b>' +
+      (d.notes ? ' <span style="font-size:12.5px;color:var(--text2);">— ' + esc(d.notes) + '</span>' : '') +
+      '</div><span style="font-size:11.5px;color:var(--text3);">发布于 ' + fmtTime(d.uploadedAt) + ' · ' + fmtSize(d.size) + '</span></div>';
+  }).catch(function () { $("upMeta").innerHTML = '<div class="empty">暂不可用</div>'; });
+}
+var upFile = null;
+$("upFile").addEventListener("change", function () {
+  upFile = this.files[0];
+  $("upFileText").textContent = upFile
+    ? upFile.name + "（" + fmtSize(upFile.size) + "）"
+    : "选择 zip 安装包（≤50MB）";
+  $("upBtn").disabled = !upFile;
+});
+$("upBtn").onclick = function () {
+  var version = $("upVer").value.trim();
+  if (!version) { toast("请填写版本号", false); return; }
+  if (!upFile) { toast("请选择 zip 文件", false); return; }
+  if (upFile.size > 50 * 1024 * 1024) { toast("zip 不能超过 50MB", false); return; }
+  $("upBtn").disabled = true;
+  $("upStatus").textContent = "获取上传地址…";
+  api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim(), name: upFile.name, size: upFile.size })
+    .then(function (d) {
+      $("upStatus").textContent = "上传中…";
+      return fetch(d.uploadUrl, { method: "PUT", body: upFile });
+    })
+    .then(function (r) {
+      if (!r.ok) throw new Error("上传失败");
+      $("upStatus").textContent = "发布成功！客户端将自动检测到 v" + $("upVer").value.trim();
+      toast("更新已发布");
+      $("upFile").value = ""; $("upFileText").textContent = "选择 zip 安装包（≤50MB）"; upFile = null;
+      loadUpdate();
+    })
+    .catch(function (e) { $("upStatus").textContent = "发布失败：" + e.message; toast("发布失败", false); })
+    .finally(function () { $("upBtn").disabled = !upFile; });
+};
+
 /* ============ 系统操作 ============ */
 function broadcast() {
   var text = $("bcText").value.trim();
@@ -1044,7 +1124,7 @@ function switchTab(tab) {
   document.querySelectorAll(".nav-item").forEach(function (n) {
     n.classList.toggle("active", n.getAttribute("data-tab") === tab);
   });
-  var tabs = ["dashboard", "users", "groups", "messages", "files", "moderation", "feedback", "system"];
+  var tabs = ["dashboard", "users", "groups", "messages", "files", "moderation", "feedback", "update", "system"];
   tabs.forEach(function (t) {
     var el = $("tab-" + t);
     el.classList.toggle("hidden", t !== tab);
@@ -1055,7 +1135,7 @@ function switchTab(tab) {
       el.classList.add("tab-view");
     }
   });
-  var titles = { dashboard: "概览", users: "用户管理", groups: "群聊管理", messages: "消息记录", files: "文件管理", moderation: "封号管理", feedback: "反馈管理", system: "系统操作" };
+  var titles = { dashboard: "概览", users: "用户管理", groups: "群聊管理", messages: "消息记录", files: "文件管理", moderation: "封号管理", feedback: "反馈管理", update: "更新发布", system: "系统操作" };
   $("pageTitle").textContent = titles[tab];
   if (tab === "users") loadUsers();
   if (tab === "groups") loadGroups();
@@ -1063,6 +1143,7 @@ function switchTab(tab) {
   if (tab === "files") loadFiles();
   if (tab === "moderation") loadModeration();
   if (tab === "feedback") loadFeedback();
+  if (tab === "update") loadUpdate();
   if (tab === "dashboard") loadStats();
 }
 

@@ -385,6 +385,33 @@ exports.handler = async (event) => {
     return json(200, { sent: online.length });
   }
 
+  // ---- 更新发布（上传新版 zip，存 Blob，供客户端自动更新） ----
+  if (method === "POST" && pathPart === "update") {
+    const version = String(body.version || "").trim();
+    if (!/^[\w.\-]+$/.test(version)) return json(400, { error: "bad-version" });
+    const size = Number(body.size) || 0;
+    if (size <= 0 || size > 50 * 1024 * 1024) return json(413, { error: "too-large" });
+    const blobKey = "blob:update:zip";
+    try { await store().delete(blobKey); } catch { /* ignore */ }
+    let uploadUrl = null;
+    try {
+      uploadUrl = await store().createUploadUrl(blobKey, { expire: 1800 });
+    } catch (e) {
+      console.error("[update createUploadUrl]", e.message);
+      return json(500, { error: "upload-unavailable" });
+    }
+    await writeState("update:meta", {
+      version,
+      notes: String(body.notes || "").slice(0, 1000),
+      name: String(body.name || "ayanball-update.zip"),
+      size,
+      uploadedAt: Date.now(),
+      downloadUrl: "/.netlify/functions/update?download=1",
+    });
+    console.log(`[更新发布] v${version} by admin`);
+    return json(200, { uploadUrl, version, downloadUrl: "/.netlify/functions/update?download=1" });
+  }
+
   return json(404, { error: "not-found" });
 };
 
