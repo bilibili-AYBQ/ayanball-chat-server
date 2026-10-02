@@ -251,11 +251,11 @@
     <div class="login-sub">图形化管理面板 · 仅限管理员访问</div>
     <div class="field">
       <div class="field-label">管理员密码</div>
-      <input class="input" id="loginPass" type="password" placeholder="请输入 ADMIN_KEY / 默认密码" autocomplete="current-password" />
+      <input class="input" id="loginPass" type="password" placeholder="请输入管理密码" autocomplete="current-password" />
     </div>
     <div class="login-err" id="loginErr"></div>
     <button class="btn btn-primary" id="loginBtn">登 录</button>
-    <div class="login-hint">默认密码：ayanball-admin（可用环境变量 ADMIN_KEY 修改）。该面板仅为本机测试服务端提供图形化管理。</div>
+    <div class="login-hint">管理密码由服务器环境变量 ADMIN_KEY 配置，高强度加密保护，无法通过页面获取。</div>
   </div>
 </div>
 
@@ -483,7 +483,8 @@
             </label>
             <input type="file" id="upFile" accept=".zip,application/zip,application/x-zip-compressed" hidden />
             <div id="upStatus" style="margin-bottom:12px;font-size:13px;color:var(--text2);min-height:18px;"></div>
-            <div style="display:flex;justify-content:flex-end;">
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+              <button class="btn" id="upClearBtn" style="color:var(--red);border-color:var(--red);">清除更新</button>
               <button class="btn btn-primary" id="upBtn" disabled>发布更新</button>
             </div>
           </div>
@@ -1066,30 +1067,47 @@ $("upFile").addEventListener("change", function () {
   upFile = this.files[0];
   $("upFileText").textContent = upFile
     ? upFile.name + "（" + fmtSize(upFile.size) + "）"
-    : "选择 zip 安装包（≤50MB）";
-  $("upBtn").disabled = !upFile;
+    : "选择 zip 安装包（≤50MB，可不选仅设版本）";
+  $("upBtn").disabled = !$("upVer").value.trim();
 });
+$("upVer").addEventListener("input", function () { $("upBtn").disabled = !$("upVer").value.trim(); });
 $("upBtn").onclick = function () {
   var version = $("upVer").value.trim();
   if (!version) { toast("请填写版本号", false); return; }
-  if (!upFile) { toast("请选择 zip 文件", false); return; }
-  if (upFile.size > 50 * 1024 * 1024) { toast("zip 不能超过 50MB", false); return; }
+  if (upFile && upFile.size > 50 * 1024 * 1024) { toast("zip 不能超过 50MB", false); return; }
   $("upBtn").disabled = true;
   $("upStatus").textContent = "获取上传地址…";
-  api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim(), name: upFile.name, size: upFile.size })
+  api("/api/admin/update", "POST", { version: version, notes: $("upNotes").value.trim(), name: upFile ? upFile.name : "ayanball-update.zip", size: upFile ? upFile.size : 0 })
     .then(function (d) {
-      $("upStatus").textContent = "上传中…";
-      return fetch(d.uploadUrl, { method: "PUT", body: upFile });
+      if (upFile && d.uploadUrl) {
+        $("upStatus").textContent = "上传安装包…";
+        return fetch(d.uploadUrl, { method: "PUT", body: upFile }).then(function (r) {
+          if (!r.ok) throw new Error("上传失败");
+          return d;
+        });
+      }
+      return d;
     })
-    .then(function (r) {
-      if (!r.ok) throw new Error("上传失败");
-      $("upStatus").textContent = "发布成功！客户端将自动检测到 v" + $("upVer").value.trim();
-      toast("更新已发布");
-      $("upFile").value = ""; $("upFileText").textContent = "选择 zip 安装包（≤50MB）"; upFile = null;
+    .then(function () {
+      $("upStatus").textContent = upFile
+        ? "发布成功（含安装包）！客户端将自动检测到 v" + $("upVer").value.trim()
+        : "已设置当前版本 v" + $("upVer").value.trim() + "（未附安装包）";
+      toast(upFile ? "更新已发布" : "当前版本已更新");
+      $("upFile").value = ""; $("upFileText").textContent = "选择 zip 安装包（≤50MB，可不选仅设版本）"; upFile = null;
       loadUpdate();
     })
     .catch(function (e) { $("upStatus").textContent = "发布失败：" + e.message; toast("发布失败", false); })
-    .finally(function () { $("upBtn").disabled = !upFile; });
+    .finally(function () { $("upBtn").disabled = !$("upVer").value.trim(); });
+};
+$("upClearBtn").onclick = function () {
+  confirmDialog("清除更新", "将撤销当前发布的版本与安装包，客户端将不再提示更新。确认清除？").then(function (ok) {
+    if (!ok) return;
+    api("/api/admin/update", "DELETE").then(function () {
+      toast("已清除更新"); $("upVer").value = ""; $("upNotes").value = "";
+      $("upFile").value = ""; $("upFileText").textContent = "选择 zip 安装包（≤50MB，可不选仅设版本）"; upFile = null;
+      loadUpdate();
+    }).catch(function () { toast("清除失败", false); });
+  });
 };
 
 /* ============ 系统操作 ============ */

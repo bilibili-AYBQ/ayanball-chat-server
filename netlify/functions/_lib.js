@@ -8,7 +8,8 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const FILE_TTL_MS = 3 * 24 * 3600 * 1000; // 3 天
 const HISTORY_LIMIT = 50;
 const MAX_GROUP_MEMBERS = 100; // 普通群上限 100 人
-const ADMIN_PASSWORD = process.env.ADMIN_KEY || "ayanball-admin";
+// 管理密码：仅从环境变量 ADMIN_KEY 读取（高强度，不硬编码、不外显）；未设置则禁止登录
+const ADMIN_PASSWORD = process.env.ADMIN_KEY || "";
 
 let _store = null;
 function store() {

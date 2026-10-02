@@ -390,26 +390,37 @@ exports.handler = async (event) => {
     const version = String(body.version || "").trim();
     if (!/^[\w.\-]+$/.test(version)) return json(400, { error: "bad-version" });
     const size = Number(body.size) || 0;
-    if (size <= 0 || size > 50 * 1024 * 1024) return json(413, { error: "too-large" });
+    if (size > 50 * 1024 * 1024) return json(413, { error: "too-large" });
+    const hasZip = size > 0; // 传了 zip 才有安装包；否则仅设置当前版本号
     const blobKey = "blob:update:zip";
-    try { await store().delete(blobKey); } catch { /* ignore */ }
     let uploadUrl = null;
-    try {
-      uploadUrl = await store().createUploadUrl(blobKey, { expire: 1800 });
-    } catch (e) {
-      console.error("[update createUploadUrl]", e.message);
-      return json(500, { error: "upload-unavailable" });
+    if (hasZip) {
+      try { await store().delete(blobKey); } catch { /* ignore */ }
+      try {
+        uploadUrl = await store().createUploadUrl(blobKey, { expire: 1800 });
+      } catch (e) {
+        console.error("[update createUploadUrl]", e.message);
+        return json(500, { error: "upload-unavailable" });
+      }
     }
     await writeState("update:meta", {
       version,
       notes: String(body.notes || "").slice(0, 1000),
       name: String(body.name || "ayanball-update.zip"),
-      size,
+      size, hasZip,
       uploadedAt: Date.now(),
       downloadUrl: "/.netlify/functions/update?download=1",
     });
-    console.log(`[更新发布] v${version} by admin`);
-    return json(200, { uploadUrl, version, downloadUrl: "/.netlify/functions/update?download=1" });
+    console.log(`[更新发布] v${version}${hasZip ? "（含安装包）" : ""} by admin`);
+    return json(200, { uploadUrl, version, downloadUrl: "/.netlify/functions/update?download=1", hasZip });
+  }
+
+  // ---- 清除已发布更新（撤销发布） ----
+  if (method === "DELETE" && pathPart === "update") {
+    await writeState("update:meta", null);
+    try { await store().delete("blob:update:zip"); } catch { /* ignore */ }
+    console.log("[更新清除] by admin");
+    return json(200, { ok: true });
   }
 
   return json(404, { error: "not-found" });

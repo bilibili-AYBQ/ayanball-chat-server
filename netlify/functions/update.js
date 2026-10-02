@@ -33,6 +33,7 @@ exports.handler = async (event) => {
     notes: meta.notes || "",
     uploadedAt: meta.uploadedAt || 0,
     size: meta.size || 0,
+    hasZip: !!meta.hasZip,
     name: meta.name || "ayanball-update.zip",
     downloadUrl: "/.netlify/functions/update?download=1",
   });
