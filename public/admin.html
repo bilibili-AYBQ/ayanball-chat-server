@@ -477,11 +477,9 @@
               <input class="input" id="upVer" placeholder="版本号（如 1.2.0）" style="max-width:200px;" />
               <input class="input" id="upNotes" placeholder="更新说明（选填）" style="flex:1;" />
             </div>
-            <label class="up-file" id="upFileLabel" style="display:flex;align-items:center;gap:10px;cursor:pointer;border:1.5px dashed var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:12px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M7 9l5-5 5 5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span id="upFileText" style="font-size:13px;color:var(--text2);">选择 zip 安装包（≤50MB）</span>
-            </label>
-            <input type="file" id="upFile" accept=".zip,application/zip,application/x-zip-compressed" hidden />
+            <input type="file" id="upFile" accept=".zip,application/zip,application/x-zip-compressed"
+              style="width:100%;padding:10px 12px;border:1.5px dashed var(--bd);border-radius:10px;background:transparent;color:var(--text1);cursor:pointer;margin-bottom:8px;font-size:13px;" />
+            <div id="upFileText" style="font-size:12px;color:var(--text2);margin-bottom:12px;">点击上方按钮选择 zip 安装包（≤50MB；不选则仅设置当前版本）</div>
             <div id="upStatus" style="margin-bottom:12px;font-size:13px;color:var(--text2);min-height:18px;"></div>
             <div style="display:flex;justify-content:flex-end;gap:10px;">
               <button class="btn" id="upClearBtn" style="color:var(--red);border-color:var(--red);">清除更新</button>
@@ -1067,7 +1065,7 @@ $("upFile").addEventListener("change", function () {
   upFile = this.files[0];
   $("upFileText").textContent = upFile
     ? upFile.name + "（" + fmtSize(upFile.size) + "）"
-    : "选择 zip 安装包（≤50MB，可不选仅设版本）";
+    : "点击上方按钮选择 zip 安装包（≤50MB；不选则仅设置当前版本）";
   $("upBtn").disabled = !$("upVer").value.trim();
 });
 $("upVer").addEventListener("input", function () { $("upBtn").disabled = !$("upVer").value.trim(); });
