@@ -47,10 +47,13 @@ exports.handler = async (event) => {
   if (!channel.startsWith("private-")) return json(403, { error: "channel-forbidden" });
 
   // 只允许订阅自己的频道：user_/call_/conv_dm_ 必须含自己的 id；conv_g_ 必须是群成员
+  // 注意：用户 id 格式为 u_xxx（含下划线），不能用 split("_").pop() 截取，必须整段与 me.id 比对
   const name = channel.replace("private-", "");
   if (name.startsWith("user_") || name.startsWith("call_") || name.startsWith("conv_dm_")) {
-    const id = name.split("_").pop();
-    if (id !== me.id) return json(403, { error: "channel-forbidden" });
+    const okUser = name === `user_${me.id}`;
+    const okCall = name === `call_${me.id}`;
+    const okDm = name === `conv_dm_${me.id}`;
+    if (!okUser && !okCall && !okDm) return json(403, { error: "channel-forbidden" });
   } else if (name.startsWith("conv_g_")) {
     const gid = name.slice("conv_g_".length);
     const groups = (await readState("groups")) || {};
