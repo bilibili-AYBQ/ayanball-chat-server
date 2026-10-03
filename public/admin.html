@@ -473,9 +473,9 @@
         <div class="card">
           <div class="card-head"><div class="card-title">发布新版本</div></div>
           <div class="card-body" style="padding:16px 18px;">
-            <div style="display:flex;gap:12px;margin-bottom:12px;">
+            <div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;">
               <input class="input" id="upVer" placeholder="版本号（如 1.2.0）" style="max-width:200px;" />
-              <input class="input" id="upNotes" placeholder="更新说明（选填）" style="flex:1;" />
+              <textarea class="input" id="upNotes" rows="3" placeholder="更新说明（选填，支持回车换行）" style="flex:1;resize:vertical;"></textarea>
             </div>
             <input type="file" id="upFile" accept=".zip,application/zip,application/x-zip-compressed"
               style="width:100%;padding:10px 12px;border:1.5px dashed var(--bd);border-radius:10px;background:transparent;color:var(--text1);cursor:pointer;margin-bottom:8px;font-size:13px;" />
