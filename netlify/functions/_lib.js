@@ -29,8 +29,38 @@ function store() {
   return _store;
 }
 
+// ---------------- Vercel KV 存储后端 ----------------
+let _kv = null;
+function hasKv() {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+function kv() {
+  if (!_kv) {
+    const { createClient } = require("@vercel/kv");
+    _kv = createClient({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+  }
+  return _kv;
+}
+
+/** 本地开发兜底：无 KV/Netlify env 时用内存 Map，便于函数逻辑自测 */
+const _mem = new Map();
+function hasNetlify() {
+  return !!(process.env.NETLIFY_SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID);
+}
+function memReadState(key) {
+  const v = _mem.get(key);
+  return v === undefined ? null : v;
+}
+function memWriteState(key, val) {
+  _mem.set(key, val);
+}
+
 /** 读取 JSON 状态（分 key） */
 async function readState(key) {
+  if (hasKv()) {
+    try { return await kv().get(key); } catch { return null; }
+  }
+  if (!hasNetlify()) return memReadState(key);
   try {
     const v = await store().get(key, { type: "json" });
     return v == null ? null : v;
@@ -42,7 +72,9 @@ async function readState(key) {
 /** 写入 JSON 状态（整个 key 原子覆盖） */
 async function writeState(key, val) {
   try {
-    await store().set(key, JSON.stringify(val));
+    if (hasKv()) await kv().set(key, val);
+    else if (!hasNetlify()) await memWriteState(key, val);
+    else await store().set(key, JSON.stringify(val));
   } catch (e) {
     console.error("[writeState]", key, e.message);
   }
@@ -54,6 +86,51 @@ async function mutate(key, fn, def) {
   const next = fn(cur) ?? cur;
   await writeState(key, next);
   return next;
+}
+
+// ---------------- Vercel Blob 文件存储（更新包 zip / 大文件） ----------------
+const { Blob } = require("@vercel/blob");
+async function putBlob(key, buf) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) { console.error("[putBlob] missing BLOB_READ_WRITE_TOKEN"); throw new Error("no-blob-token"); }
+  const b = await Blob.put(key, Buffer.from(buf), { access: "public", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false });
+  return b.url;
+}
+async function delBlob(url) {
+  if (!url || !process.env.BLOB_READ_WRITE_TOKEN) return;
+  try { await Blob.del(url, { token: process.env.BLOB_READ_WRITE_TOKEN }); } catch { /* ignore */ }
+}
+async function getBlobBytes(url) {
+  if (!url) return null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return Buffer.from(await r.arrayBuffer());
+  } catch { return null; }
+}
+
+/** 按前缀列出所有 key（跨后端：Vercel KV scan / Netlify list / 本地内存） */
+async function listKeys(prefix) {
+  if (hasKv()) {
+    const keys = [];
+    let cursor = "0";
+    try {
+      do {
+        const r = await kv().scan(cursor, { match: prefix + "*", count: 100 });
+        keys.push(...(r.keys || []));
+        cursor = r.cursor;
+      } while (cursor && cursor !== "0");
+    } catch (e) {
+      console.error("[listKeys-scan]", e.message);
+    }
+    return keys;
+  }
+  if (!hasNetlify()) return Array.from(_mem.keys()).filter((k) => k.startsWith(prefix));
+  try {
+    const list = await store().list({ prefix });
+    return (list?.blobs || []).map((b) => b.key);
+  } catch {
+    return [];
+  }
 }
 
 // ---------------- 工具 ----------------
@@ -211,9 +288,37 @@ function authed(event) {
   return auth || null;
 }
 
+// ---------------- Vercel Functions 适配层 ----------------
+// Vercel Node 函数是 (req,res)，Netlify 是 exports.handler(event)->{statusCode,headers,body}。
+// vercelize 把 Vercel 的 req/res 转成 Netlify 风格 event，调用原 handler，再把返回值写回 res。
+function vercelize(fn) {
+  return async function (req, res) {
+    try {
+      let body = "";
+      if (req.body != null) {
+        body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+      }
+      const event = {
+        httpMethod: req.method || "GET",
+        queryStringParameters: req.query || {},
+        headers: req.headers || {},
+        body,
+      };
+      const out = await fn(event);
+      res.status(out.statusCode || 200);
+      for (const [k, v] of Object.entries(out.headers || {})) res.setHeader(k, v);
+      res.send(out.body);
+    } catch (e) {
+      console.error("[vercelize]", e);
+      res.status(500).json({ error: "internal" });
+    }
+  };
+}
+
 module.exports = {
-  store, readState, writeState, mutate, uid, hashPwd, safeName, genAbcId,
+  store, readState, writeState, mutate, listKeys, putBlob, delBlob, getBlobBytes,
+  uid, hashPwd, safeName, genAbcId,
   publicUser, avatarOf, roomKeyFor, preview, groupPayload, groupRole,
-  resolveRoomsFor, json, readBody, authed,
+  resolveRoomsFor, json, readBody, authed, vercelize,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS, ADMIN_PASSWORD,
 };

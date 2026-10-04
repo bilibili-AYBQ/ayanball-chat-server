@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_* 个人事件 / private-conv_* 消息 / private-call_* 通话信令）
 const Pusher = require("pusher");
 const {
-  readState, writeState, mutate, uid, hashPwd, publicUser, avatarOf, genAbcId,
+  readState, writeState, mutate, listKeys, uid, hashPwd, publicUser, avatarOf, genAbcId,
   roomKeyFor, preview, groupPayload, groupRole, resolveRoomsFor,
   json, readBody, authed,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS,
@@ -77,10 +77,10 @@ async function loadRequests() { return (await readState("requests")) || {}; }
 /** 读取某用户全部会话（分 key 存储的 room） */
 async function loadRoomsMap() {
   const map = {};
-  const list = await require("./_lib.js").store().list({ prefix: "room:" });
-  for (const item of (list?.blobs || [])) {
-    const v = await readState(item.key);
-    if (v) map[item.key.replace("room:", "")] = v;
+  const keys = await listKeys("room:");
+  for (const key of keys) {
+    const v = await readState(key);
+    if (v) map[key.replace("room:", "")] = v;
   }
   return map;
 }

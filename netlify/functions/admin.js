@@ -4,7 +4,8 @@
 // 实时推送：Pusher Channels（private-user_*）
 const Pusher = require("pusher");
 const {
-  store, readState, writeState, mutate, uid, avatarOf, json, readBody, hashPwd,
+  store, readState, writeState, mutate, listKeys, putBlob, delBlob,
+  uid, avatarOf, json, readBody, hashPwd,
   ADMIN_PASSWORD,
 } = require("./_lib.js");
 
@@ -65,9 +66,9 @@ exports.handler = async (event) => {
   // ---- 统计 ----
   if (method === "GET" && pathPart === "stats") {
     let msgTotal = 0, fileTotal = 0;
-    const list = await store().list({ prefix: "room:" });
-    for (const item of (list?.blobs || [])) {
-      const room = (await readState(item.key)) || [];
+    const listKeysRes = await listKeys("room:");
+    for (const key of listKeysRes) {
+      const room = (await readState(key)) || [];
       msgTotal += room.length;
       for (const m of room) if (m.kind === "file") fileTotal++;
     }
@@ -301,12 +302,12 @@ exports.handler = async (event) => {
   if (method === "GET" && pathPart === "messages") {
     const limit = Number(event.queryStringParameters?.limit) || 200;
     const arr = [];
-    const list = await store().list({ prefix: "room:" });
-    for (const item of (list?.blobs || [])) {
-      const key = item.key.replace("room:", "");
+    const list = await listKeys("room:");
+    for (const item of list) {
+      const key = item.replace("room:", "");
       const isGroup = key.startsWith("g:");
       const group = groups[key];
-      const room = (await readState(item.key)) || [];
+      const room = (await readState(key)) || [];
       for (const m of room) {
         arr.push({
           id: m.id,
@@ -343,7 +344,7 @@ exports.handler = async (event) => {
     if (!meta) return json(404, { error: "not-found" });
     delete files[meta.id];
     await writeState("files", files);
-    try { await store().delete(`blob:${meta.id}`); } catch { /* ignore */ }
+    try { if (meta.blobUrl) await delBlob(meta.blobUrl); else await store().delete(`blob:${meta.id}`); } catch { /* ignore */ }
     return json(200, {});
   }
 
@@ -354,7 +355,7 @@ exports.handler = async (event) => {
     for (const [fid, meta] of Object.entries(files)) {
       if (now > meta.expiresAt) {
         delete files[fid];
-        try { await store().delete(`blob:${fid}`); } catch { /* ignore */ }
+        try { if (meta.blobUrl) await delBlob(meta.blobUrl); else await store().delete(`blob:${fid}`); } catch { /* ignore */ }
         removed++;
       }
     }
@@ -428,7 +429,7 @@ exports.handler = async (event) => {
     if (typeof data !== "string" || !data) return json(400, { error: "no-data" });
     const idx = Number(index);
     if (Number.isNaN(idx) || idx < 0 || idx >= draft.totalChunks) return json(400, { error: "bad-index" });
-    await store().set(`updatec:${uploadId}:${idx}`, Buffer.from(data, "base64"));
+    await writeState(`updatec:${uploadId}:${idx}`, data);
     draft.uploaded = (draft.uploaded || 0) + 1;
     await writeState(`update:draft:${uploadId}`, draft);
     return json(200, { ok: true, index: idx, uploaded: draft.uploaded, total: draft.totalChunks });
@@ -441,17 +442,17 @@ exports.handler = async (event) => {
     if (!draft) return json(404, { error: "no-draft" });
     const parts = [];
     for (let i = 0; i < draft.totalChunks; i++) {
-      const raw = await store().get(`updatec:${uploadId}:${i}`, { type: "arrayBuffer" });
-      if (raw == null) return json(400, { error: "missing-chunk-" + i });
-      parts.push(Buffer.from(raw));
+      const b64 = await readState(`updatec:${uploadId}:${i}`);
+      if (b64 == null) return json(400, { error: "missing-chunk-" + i });
+      parts.push(Buffer.from(b64, "base64"));
     }
     const buf = Buffer.concat(parts);
-    await store().set("updatezip", buf);
-    for (let i = 0; i < draft.totalChunks; i++) { try { await store().delete(`updatec:${uploadId}:${i}`); } catch { /* ignore */ } }
+    const zipUrl = await putBlob("updatezip", buf);
+    for (let i = 0; i < draft.totalChunks; i++) { try { await writeState(`updatec:${uploadId}:${i}`, null); } catch { /* ignore */ } }
     await writeState(`update:draft:${uploadId}`, null);
     await writeState("update:meta", {
       version: draft.version, notes: draft.notes, name: draft.name,
-      size: draft.size, hasZip: true, uploadedAt: Date.now(),
+      size: draft.size, hasZip: true, uploadedAt: Date.now(), zipUrl,
       downloadUrl: "/.netlify/functions/update?download=1",
     });
     console.log(`[更新发布] v${draft.version}（含安装包 ${draft.size} 字节） by admin`);
@@ -460,8 +461,9 @@ exports.handler = async (event) => {
 
   // ---- 清除已发布更新（撤销发布） ----
   if (method === "DELETE" && pathPart === "update") {
+    const meta = await readState("update:meta");
     await writeState("update:meta", null);
-    try { await store().delete("updatezip"); } catch { /* ignore */ }
+    if (meta?.zipUrl) await delBlob(meta.zipUrl);
     console.log("[更新清除] by admin");
     return json(200, { ok: true });
   }

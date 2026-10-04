@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/.netlify/functions/:fn", "destination": "/api/:fn" }
+  ],
+  "functions": {
+    "api/*.js": { "maxDuration": 30 }
+  }
+}
