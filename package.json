@@ -3,17 +3,18 @@
   "version": "2.0.0",
   "private": true,
   "description": "AyanBall Chat 动态服务端（Vercel Functions + Pusher 实时通道 + 图形化管理面板）",
-  "main": "server.js",
+  "main": "zeabur.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node zeabur.js",
     "serve:ws": "node server.js",
     "test": "node test-netlify.cjs"
   },
   "dependencies": {
-    "ws": "^8.18.0",
-    "pusher": "^5.2.0",
     "@netlify/blobs": "^8.2.0",
+    "@vercel/blob": "^2.8.0",
     "@vercel/kv": "^3.0.0",
-    "@vercel/blob": "^2.8.0"
+    "ioredis": "^6.0.0",
+    "pusher": "^5.2.0",
+    "ws": "^8.18.0"
   }
 }

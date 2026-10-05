@@ -2,6 +2,8 @@
 // 数据持久化：Netlify Blobs（分 key 存储，减少并发竞争）
 // 实时推送：Pusher（消息频道 conv_* / 个人频道 user_* / 通话频道 call_*，均 private- 前缀）
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const { getStore } = require("@netlify/blobs");
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -42,6 +44,22 @@ function kv() {
   return _kv;
 }
 
+// ---------------- Redis 存储后端（Zeabur 自带 Redis / REDIS_URL） ----------------
+let _redis = null;
+function hasRedis() {
+  return !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+}
+function redis() {
+  if (!_redis) {
+    const Redis = require("ioredis");
+    const opts = process.env.REDIS_URL
+      ? { url: process.env.REDIS_URL, tls: process.env.REDIS_TLS ? {} : undefined, maxRetriesPerRequest: 2 }
+      : { host: process.env.REDIS_HOST, port: Number(process.env.REDIS_PORT || 6379), password: process.env.REDIS_PASSWORD, maxRetriesPerRequest: 2 };
+    _redis = new Redis(opts.url ? opts.url : opts);
+  }
+  return _redis;
+}
+
 /** 本地开发兜底：无 KV/Netlify env 时用内存 Map，便于函数逻辑自测 */
 const _mem = new Map();
 function hasNetlify() {
@@ -60,6 +78,9 @@ async function readState(key) {
   if (hasKv()) {
     try { return await kv().get(key); } catch { return null; }
   }
+  if (hasRedis()) {
+    try { const v = await redis().get(key); return v == null ? null : JSON.parse(v); } catch { return null; }
+  }
   if (!hasNetlify()) return memReadState(key);
   try {
     const v = await store().get(key, { type: "json" });
@@ -73,6 +94,7 @@ async function readState(key) {
 async function writeState(key, val) {
   try {
     if (hasKv()) await kv().set(key, val);
+    else if (hasRedis()) await redis().set(key, JSON.stringify(val));
     else if (!hasNetlify()) await memWriteState(key, val);
     else await store().set(key, JSON.stringify(val));
   } catch (e) {
@@ -89,18 +111,41 @@ async function mutate(key, fn, def) {
 }
 
 // ---------------- Vercel Blob 文件存储（更新包 zip / 大文件） ----------------
+// 无 BLOB token 时回退到本地磁盘（Zeabur 用持久卷 /data/blobs，本地开发用 .test-blobs）
+function localBlobDir() {
+  return process.env.ZEABUR ? "/data/blobs" : path.join(__dirname, "../../.test-blobs");
+}
+function localBlobPath(url) {
+  if (!url || !String(url).startsWith("local://")) return null;
+  const key = String(url).slice(8).replace(/[^\w-]/g, "_");
+  return path.join(localBlobDir(), key);
+}
 const { Blob } = require("@vercel/blob");
 async function putBlob(key, buf) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) { console.error("[putBlob] missing BLOB_READ_WRITE_TOKEN"); throw new Error("no-blob-token"); }
-  const b = await Blob.put(key, Buffer.from(buf), { access: "public", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false });
-  return b.url;
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const b = await Blob.put(key, Buffer.from(buf), { access: "public", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false });
+    return b.url;
+  }
+  const safe = String(key).replace(/[^\w-]/g, "_");
+  fs.mkdirSync(localBlobDir(), { recursive: true });
+  fs.writeFileSync(path.join(localBlobDir(), safe), Buffer.from(buf));
+  return "local://" + safe;
 }
 async function delBlob(url) {
-  if (!url || !process.env.BLOB_READ_WRITE_TOKEN) return;
-  try { await Blob.del(url, { token: process.env.BLOB_READ_WRITE_TOKEN }); } catch { /* ignore */ }
+  if (!url) return;
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try { await Blob.del(url, { token: process.env.BLOB_READ_WRITE_TOKEN }); } catch { /* ignore */ }
+    return;
+  }
+  const p = localBlobPath(url);
+  if (p) { try { fs.unlinkSync(p); } catch { /* ignore */ } }
 }
 async function getBlobBytes(url) {
   if (!url) return null;
+  const p = localBlobPath(url);
+  if (p) {
+    try { return fs.readFileSync(p); } catch { return null; }
+  }
   try {
     const r = await fetch(url);
     if (!r.ok) return null;
@@ -121,6 +166,20 @@ async function listKeys(prefix) {
       } while (cursor && cursor !== "0");
     } catch (e) {
       console.error("[listKeys-scan]", e.message);
+    }
+    return keys;
+  }
+  if (hasRedis()) {
+    const keys = [];
+    try {
+      let cursor = "0";
+      do {
+        const r = await redis().scan(cursor, "MATCH", prefix + "*", "COUNT", 200);
+        keys.push(...(r[1] || []));
+        cursor = r[0];
+      } while (cursor && cursor !== "0");
+    } catch (e) {
+      console.error("[listKeys-redis-scan]", e.message);
     }
     return keys;
   }
