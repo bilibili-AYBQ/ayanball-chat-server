@@ -5,3 +5,9 @@ data.json
 .netlify
 *.log
 .DS_Store
+# Cloudflare Workers 迁移备份（当前弃用，不纳入 Git，避免混淆与泄露）
+.cf_token.txt
+cf-worker/
+wrangler.toml
+verify_cf.py
+.wrangler/
