@@ -9,3 +9,29 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# 客户端走根路径访问函数（不带 /.netlify/functions），需重写到对应函数
+[[redirects]]
+  from = "/api"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/upload"
+  to = "/.netlify/functions/upload"
+  status = 200
+
+[[redirects]]
+  from = "/file"
+  to = "/.netlify/functions/file"
+  status = 200
+
+[[redirects]]
+  from = "/update"
+  to = "/.netlify/functions/update"
+  status = 200
+
+[[redirects]]
+  from = "/pusher"
+  to = "/.netlify/functions/pusher"
+  status = 200
