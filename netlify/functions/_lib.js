@@ -60,7 +60,15 @@ function redis() {
 /** 本地开发兜底：无 KV/Netlify env 时用内存 Map，便于函数逻辑自测 */
 const _mem = new Map();
 function hasNetlify() {
-  return !!(process.env.NETLIFY_SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID);
+  // Netlify Functions 运行时注入 NETLIFY / NETLIFY_URL（NETLIFY_SITE_ID 未必注入到函数），只要有即走 Blobs 持久化
+  // 此前仅检查 NETLIFY_SITE_ID 等，在函数运行时为 false → 误走内存 mem → 注册数据不持久、登录 credential
+  return !!(
+    process.env.NETLIFY ||
+    process.env.NETLIFY_URL ||
+    process.env.NETLIFY_SITE_ID ||
+    process.env.NETLIFY_BLOBS_SITE_ID ||
+    process.env.SITE_ID
+  );
 }
 function memReadState(key) {
   const v = _mem.get(key);
