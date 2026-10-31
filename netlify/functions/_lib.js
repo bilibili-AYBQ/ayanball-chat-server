@@ -16,13 +16,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_KEY || "";
 let _store = null;
 function store() {
   if (!_store) {
-    const ks = Object.keys(process.env).filter((k) => /NETLIFY|BLOBS|SITE|TOKEN|DEPLOY/i.test(k));
-    console.log("[blobs-env-keys]", ks.join(","));
-    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE;
-    const tok = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN || process.env.BLOBS_TOKEN;
-    console.log("[blobs-creds]", "siteID=" + (siteID ? "set" : "MISSING"), "token=" + (tok ? "set" : "MISSING"));
+    // Netlify 官方用法：getStore("ayanball") 单参数，函数运行时自动接线站点级 Blobs 凭据，无需手动传 siteID/token
+    // （此前手动拼 siteID/token 因 env 名不匹配抛 MissingBlobsEnvironmentError → 写入静默失败 → 数据不持久）
     try {
-      _store = getStore({ name: "ayanball", ...(siteID ? { siteID } : {}), ...(tok ? { token: tok } : {}) });
+      _store = getStore("ayanball");
     } catch (e) {
       console.log("[blobs-getstore-error]", e.message);
       throw e;
