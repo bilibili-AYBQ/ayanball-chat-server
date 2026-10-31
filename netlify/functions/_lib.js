@@ -16,11 +16,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_KEY || "";
 let _store = null;
 function store() {
   if (!_store) {
-    // 恢复 Netlify 期可用写法：手动拼接 siteID/token（与 Netlify 期 7cf3f93 一致）
-    const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID || process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE;
-    const tok = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN || process.env.BLOBS_TOKEN;
+    // 官方用法：getStore("ayanball") 单参，让 @netlify/blobs 自动读取 Netlify 运行时注入的正确 Blobs 凭据
+    // 手动传 NETLIFY_AUTH_TOKEN 等会导致 Blobs API 401（错误的凭据）→ 写入失败 → 数据不持久
     try {
-      _store = getStore({ name: "ayanball", ...(siteID ? { siteID } : {}), ...(tok ? { token: tok } : {}) });
+      _store = getStore("ayanball");
     } catch (e) {
       console.log("[blobs-getstore-error]", e.message);
       throw e;
