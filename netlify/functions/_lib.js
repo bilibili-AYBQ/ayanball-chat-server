@@ -126,6 +126,11 @@ async function diagnoseState() {
     const v = await s.get("diag:probe", { type: "json" });
     out.store = "ok";
     out.probe = v;
+    const users = await readState("users");
+    const tokens = await readState("tokens");
+    out.usersCount = users ? Object.keys(users).length : 0;
+    out.tokensCount = tokens ? Object.keys(tokens).length : 0;
+    out.tokenKeys = tokens ? Object.keys(tokens) : [];
   } catch (e) {
     out.store = "fail";
     out.err = e.name + ": " + e.message;
