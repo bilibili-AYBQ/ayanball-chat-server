@@ -128,6 +128,13 @@ exports.handler = async (event) => {
     if (action === "diag.blobs") {
       const d = await diagnoseState();
       d.eventBlobs = !!event.blobs;
+      try {
+        const raw = Buffer.from(event.blobs, "base64").toString("utf8");
+        const data = JSON.parse(raw);
+        d.blobFields = Object.keys(data);
+      } catch (e) {
+        d.blobFields = "decode-fail: " + e.message;
+      }
       return json(200, d);
     }
 
