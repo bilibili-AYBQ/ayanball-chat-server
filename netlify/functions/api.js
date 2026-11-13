@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_* 个人事件 / private-conv_* 消息 / private-call_* 通话信令）
 const Pusher = require("pusher");
 const {
-  initBlobs, readState, writeState, mutate, listKeys, uid, hashPwd, publicUser, avatarOf, genAbcId,
+  initBlobs, diagnoseState, readState, writeState, mutate, listKeys, uid, hashPwd, publicUser, avatarOf, genAbcId,
   roomKeyFor, preview, groupPayload, groupRole, resolveRoomsFor,
   json, readBody, authed,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS,
@@ -123,6 +123,12 @@ exports.handler = async (event) => {
           cluster: process.env.PUSHER_CLUSTER || "mt1",
         },
       });
+    }
+
+    if (action === "diag.blobs") {
+      const d = await diagnoseState();
+      d.eventBlobs = !!event.blobs;
+      return json(200, d);
     }
 
     if (action === "auth.register") {

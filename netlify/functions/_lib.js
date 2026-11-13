@@ -100,6 +100,33 @@ function memWriteState(key, val) {
   _mem.set(key, val);
 }
 
+/** 临时诊断：返回后端判断与 Blobs 探针读写结果（测完移除） */
+async function diagnoseState() {
+  const out = {
+    hasKv: hasKv(), hasRedis: hasRedis(), hasNetlify: hasNetlify(),
+    blobsConnected: _blobsConnected,
+    env: {
+      NETLIFY: !!process.env.NETLIFY,
+      NETLIFY_URL: !!process.env.NETLIFY_URL,
+      NETLIFY_SITE_ID: !!process.env.NETLIFY_SITE_ID,
+      NETLIFY_BLOBS_SITE_ID: !!process.env.NETLIFY_BLOBS_SITE_ID,
+      NETLIFY_BLOBS_TOKEN: !!process.env.NETLIFY_BLOBS_TOKEN,
+      NETLIFY_AUTH_TOKEN: !!process.env.NETLIFY_AUTH_TOKEN,
+    },
+  };
+  try {
+    const s = store();
+    await s.set("diag:probe", JSON.stringify({ t: Date.now() }));
+    const v = await s.get("diag:probe", { type: "json" });
+    out.store = "ok";
+    out.probe = v;
+  } catch (e) {
+    out.store = "fail";
+    out.err = e.name + ": " + e.message;
+  }
+  return out;
+}
+
 /** 读取 JSON 状态（分 key） */
 async function readState(key) {
   if (hasKv()) {
@@ -402,7 +429,7 @@ function vercelize(fn) {
 }
 
 module.exports = {
-  store, initBlobs, readState, writeState, mutate, listKeys, putBlob, delBlob, getBlobBytes,
+  store, initBlobs, diagnoseState, readState, writeState, mutate, listKeys, putBlob, delBlob, getBlobBytes,
   uid, hashPwd, safeName, genAbcId,
   publicUser, avatarOf, roomKeyFor, preview, groupPayload, groupRole,
   resolveRoomsFor, json, readBody, authed, vercelize,
