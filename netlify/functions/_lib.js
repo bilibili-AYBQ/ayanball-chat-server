@@ -34,13 +34,19 @@ function initBlobs(event) {
 function store() {
   if (!_store) {
     try {
-      // 优先用 connectLambda 注入的运行时上下文；若 event.blobs 未注入，回退手动凭据走 Netlify API。
-      const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
-      const token = process.env.NETLIFY_BLOBS_TOKEN;
-      if (siteID && token) {
-        _store = getStore({ name: "ayanball", siteID, token });
-      } else {
+      if (_blobsConnected) {
+        // connectLambda(event) 已注入平台运行时凭据，单参 getStore 走平台 context，
+        // 不要再传手动 siteID/token（手动 token 可能无效，会覆盖平台凭据导致 401）。
         _store = getStore("ayanball");
+      } else {
+        // 平台未注入 event.blobs 时，回退手动凭据走 Netlify API。
+        const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
+        const token = process.env.NETLIFY_BLOBS_TOKEN;
+        if (siteID && token) {
+          _store = getStore({ name: "ayanball", siteID, token });
+        } else {
+          _store = getStore("ayanball");
+        }
       }
     } catch (e) {
       console.log("[blobs-getstore-error]", e.message);
