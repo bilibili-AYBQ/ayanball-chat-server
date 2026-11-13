@@ -1,11 +1,12 @@
 // ================= AyanBall Chat · 文件下载（3 天有效期） =================
 // 返回 Blobs 预签名 GET 地址，客户端据此直接下载（支持 50MB 大文件）
 const {
-  store, readState, mutate, safeName, json,
+  initBlobs, store, readState, mutate, safeName, json,
 } = require("./_lib.js");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
+  initBlobs(event);
 
   const fileId = String(event.queryStringParameters?.id || "");
   if (!fileId.startsWith("f_")) return json(404, { error: "not-found" });

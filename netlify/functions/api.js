@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_* 个人事件 / private-conv_* 消息 / private-call_* 通话信令）
 const Pusher = require("pusher");
 const {
-  readState, writeState, mutate, listKeys, uid, hashPwd, publicUser, avatarOf, genAbcId,
+  initBlobs, readState, writeState, mutate, listKeys, uid, hashPwd, publicUser, avatarOf, genAbcId,
   roomKeyFor, preview, groupPayload, groupRole, resolveRoomsFor,
   json, readBody, authed,
   MAX_FILE_SIZE, FILE_TTL_MS, HISTORY_LIMIT, MAX_GROUP_MEMBERS,
@@ -93,6 +93,7 @@ async function loadBlocked(userId) { return (await readState(`blocked:${userId}`
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
   if (event.httpMethod !== "POST") return json(404, { error: "not-found" });
+  initBlobs(event);
 
   const { action, payload = {} } = readBody(event);
   const token = authed(event);

@@ -4,7 +4,7 @@
 // 实时推送：Pusher Channels（private-user_*）
 const Pusher = require("pusher");
 const {
-  store, readState, writeState, mutate, listKeys, putBlob, delBlob,
+  initBlobs, store, readState, writeState, mutate, listKeys, putBlob, delBlob,
   uid, avatarOf, json, readBody, hashPwd,
   ADMIN_PASSWORD,
 } = require("./_lib.js");
@@ -44,6 +44,7 @@ async function isAdminSession(event) {
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
+  initBlobs(event);
   const pathPart = (event.path || "").split("/").pop(); // stats / users / groups / messages / files ...
   const method = event.httpMethod;
 

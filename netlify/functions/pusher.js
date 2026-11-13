@@ -3,8 +3,7 @@
 // 用服务端 SECRET 对 socket_id:channel_name 做 HMAC-SHA256 签名。
 // 服务端密钥（PUSHER_SECRET）绝不进入客户端。
 const crypto = require("crypto");
-const { json, authed } = require("./_lib.js");
-const { readState } = require("./_lib.js");
+const { json, authed, readState, initBlobs } = require("./_lib.js");
 
 /** 解析 pusher-js 的 auth 请求体（application/x-www-form-urlencoded） */
 function formBody(event) {
@@ -28,6 +27,7 @@ function formBody(event) {
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
   if (event.httpMethod !== "POST") return json(404, { error: "not-found" });
+  initBlobs(event);
 
   const key = process.env.PUSHER_KEY;
   const secret = process.env.PUSHER_SECRET;

@@ -4,7 +4,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const FILE_TTL_MS = 3 * 24 * 3600 * 1000; // 3 天
@@ -14,12 +14,34 @@ const MAX_GROUP_MEMBERS = 100; // 普通群上限 100 人
 const ADMIN_PASSWORD = process.env.ADMIN_KEY || "";
 
 let _store = null;
+let _blobsConnected = false;
+/**
+ * Lambda 兼容模式（老 exports.handler(event) 写法）：平台不会自动把 Blobs 凭据写进环境，
+ * 必须在首次 getStore 之前调用 connectLambda(event)，从 event.blobs 解码运行时凭据接入 SDK。
+ * 缺这一步时 getStore 会抛 MissingBlobsEnvironmentError，读写被吞掉 → 数据不持久。
+ */
+function initBlobs(event) {
+  if (_blobsConnected) return;
+  try {
+    if (event && event.blobs) {
+      connectLambda(event);
+      _blobsConnected = true;
+    }
+  } catch (e) {
+    console.error("[blobs-connectLambda]", e.message);
+  }
+}
 function store() {
   if (!_store) {
-    // 官方用法：getStore("ayanball") 单参，让 @netlify/blobs 自动读取 Netlify 运行时注入的正确 Blobs 凭据
-    // 手动传 NETLIFY_AUTH_TOKEN 等会导致 Blobs API 401（错误的凭据）→ 写入失败 → 数据不持久
     try {
-      _store = getStore("ayanball");
+      // 优先用 connectLambda 注入的运行时上下文；若 event.blobs 未注入，回退手动凭据走 Netlify API。
+      const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
+      const token = process.env.NETLIFY_BLOBS_TOKEN;
+      if (siteID && token) {
+        _store = getStore({ name: "ayanball", siteID, token });
+      } else {
+        _store = getStore("ayanball");
+      }
     } catch (e) {
       console.log("[blobs-getstore-error]", e.message);
       throw e;
@@ -380,7 +402,7 @@ function vercelize(fn) {
 }
 
 module.exports = {
-  store, readState, writeState, mutate, listKeys, putBlob, delBlob, getBlobBytes,
+  store, initBlobs, readState, writeState, mutate, listKeys, putBlob, delBlob, getBlobBytes,
   uid, hashPwd, safeName, genAbcId,
   publicUser, avatarOf, roomKeyFor, preview, groupPayload, groupRole,
   resolveRoomsFor, json, readBody, authed, vercelize,
